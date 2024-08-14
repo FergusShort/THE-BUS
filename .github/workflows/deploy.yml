@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # Change this to your main branch
+      - main  # Deploy on pushes to the main branch
 
 jobs:
   deploy:
@@ -12,27 +12,25 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          path: The-Bus-CardGame
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '14'  # Use the version of Node.js you need
+          node-version: '16'
 
       - name: Install dependencies
-        working-directory: ./The-Bus-CardGame
-        run: npm install  # Or use 'yarn install' if you use Yarn
+        run: npm install
+        working-directory: The-Bus-CardGame
 
       - name: Build
-        working-directory: ./The-Bus-CardGame
-        run: npm run build  # Or 'yarn build'
+        run: npm run build
+        working-directory: The-Bus-CardGame
 
-      - name: List build directory
-        working-directory: ./The-Bus-CardGame
-        run: ls -la ./build
-
-      - name: Deploy
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
+          publish_branch: main
           publish_dir: ./The-Bus-CardGame/build
