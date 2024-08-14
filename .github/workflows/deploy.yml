@@ -18,10 +18,11 @@ jobs:
       with:
         node-version: '14'  # Specify the Node.js version you are using
 
-    - name: Set up Git configuration
+    - name: Set up GitHub credentials
       run: |
         git config --global user.email "github-actions@github.com"
         git config --global user.name "GitHub Actions"
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
 
     - name: Change to project directory
       run: cd The-Bus-CardGame
