@@ -19,9 +19,11 @@ jobs:
           node-version: '14'  # Use the version of Node.js you need
 
       - name: Install dependencies
+        working-directory: ./The-Bus-CardGame  # Specify the directory containing package.json
         run: npm install  # Or use 'yarn install' if you use Yarn
 
       - name: Build
+        working-directory: ./The-Bus-CardGame  # Specify the directory containing package.json
         run: npm run build  # Or 'yarn build'
 
       - name: Deploy
@@ -29,4 +31,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages  # The branch to deploy to
-          publish_dir: ./build  # The directory to publish (adjust as needed)
+          publish_dir: ./The-Bus-CardGame/build  # Adjust if the build directory is different
