@@ -32,7 +32,11 @@
 
 .hidden img {
   content: url('./hidden.jpeg');
-}
+    width: 100%; /* Make the image fit the width of the card */
+    height: 100%; /* Make the image fit the height of the card */
+    object-fit: cover; /* Ensure the image covers the card area without distortion */
+  }
+
 
 .controls {
   margin-top: 20px;
