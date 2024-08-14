@@ -19,16 +19,20 @@ jobs:
           node-version: '14'  # Use the version of Node.js you need
 
       - name: Install dependencies
-        working-directory: ./The-Bus-CardGame  # Specify the directory containing package.json
+        working-directory: ./The-Bus-CardGame
         run: npm install  # Or use 'yarn install' if you use Yarn
 
       - name: Build
-        working-directory: ./The-Bus-CardGame  # Specify the directory containing package.json
+        working-directory: ./The-Bus-CardGame
         run: npm run build  # Or 'yarn build'
+
+      - name: List build directory
+        working-directory: ./The-Bus-CardGame
+        run: ls -la ./build
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages  # The branch to deploy to
-          publish_dir: ./The-Bus-CardGame/build  # Adjust if the build directory is different
+          publish_branch: gh-pages
+          publish_dir: ./The-Bus-CardGame/build
