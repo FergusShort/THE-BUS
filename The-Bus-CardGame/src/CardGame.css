@@ -11,6 +11,19 @@
   flex-direction: column;
 }
 
+.header {
+  font-family: 'Arial', sans-serif; /* Or any font of your choice */
+  font-size: 24px; /* Adjust the size as needed */
+  font-weight: bold;
+  text-align: center;
+  color: white; /* Text color */
+  background-color: red; /* Background color */
+  padding: 20px; /* Spacing around the text */
+  border-radius: 8px; /* Rounded corners */
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Optional: Adds a subtle shadow */
+}
+
+
 .card-container {
   display: flex;
   justify-content: center;
