@@ -1,14 +1,14 @@
 {
   "files": {
-    "main.css": "/THE-BUS/static/css/main.2309c638.css",
+    "main.css": "/THE-BUS/static/css/main.d1706365.css",
     "main.js": "/THE-BUS/static/js/main.dbe7dbbc.js",
     "static/media/hidden.jpeg": "/THE-BUS/static/media/hidden.8e1dedf5740d73c5bd4b.jpeg",
     "index.html": "/THE-BUS/index.html",
-    "main.2309c638.css.map": "/THE-BUS/static/css/main.2309c638.css.map",
+    "main.d1706365.css.map": "/THE-BUS/static/css/main.d1706365.css.map",
     "main.dbe7dbbc.js.map": "/THE-BUS/static/js/main.dbe7dbbc.js.map"
   },
   "entrypoints": [
-    "static/css/main.2309c638.css",
+    "static/css/main.d1706365.css",
     "static/js/main.dbe7dbbc.js"
   ]
 }
