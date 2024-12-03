@@ -1,5 +1,3 @@
-
-
 .card-game {
   text-align: center;
   background: url('./poker-table.jpeg') no-repeat center center fixed;
@@ -11,12 +9,24 @@
   flex-direction: column;
 }
 
+.h1 {
+  font-family: 'Arial', sans-serif;
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+  color: white;
+  background-color: red;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+}
 
 .card-container {
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
+  overflow: visible;
 }
 
 .card {
@@ -24,28 +34,83 @@
   height: 140px;
   margin: 0 5px;
   position: relative;
-  overflow: hidden; /* Prevent images from overflowing */
+  /* Ensures the card is a positioned container for the img */
+  overflow: visible;
+  
+  transition: transform 0.3s ease, z-index 0.3s ease;
+}
+
+.card.previous {
+  transform: translateY(-35px) translateX(-5px);
+
+  z-index: 0;  /* Make sure previous card is behind */
+}
+
+.card.current {
+
+  z-index: 2;  /* Ensure current card is above previous */
+}
+
+.previous-card {
+  position: absolute;
+  top: -20px;
+  /* Adjusted positioning */
+  left: 0;
+  width: 100%;
+  height: 100%;
+
+  z-index: 1;  /* Ensures previous card is behind the current card */
 }
 
 .card img {
+  position: absolute;
+  /* Ensures the image covers the card's area */
+  top: 0;
+  left: 0;
   width: 100%;
+  /* Ensures the image fills the entire card */
   height: 100%;
+  object-fit: cover;
+  /* Ensures the image is properly fitted to the card */
+  border: 2px solid black; /* Adding a black border with 2px thickness */
 }
 
 .hidden img {
   content: url('./hidden.jpeg');
-    background-size: cover; /* Ensure the background image covers the entire card */
-  background-position: center; /* Center the background image */
-  background-repeat: no-repeat; /* Prevent repeating the background image */
-    object-fit: cover; /* Ensure the image covers the card area without distortion */
-    width: 100%;
-    height: 100%;
-    position: absolute; /* Ensure it covers the entire card */
-    top: 0;
-    left: 0;
-  }
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.arrow-indicator {
+  position: absolute;
+  top: -60px; /* Adjusted to place the arrow above the current card */
+  width: 0;
+  height: 0;
+  border-left: 15px solid transparent;
+  border-right: 15px solid transparent;
+  border-bottom: 20px solid yellow; /* Points downwards */
+  left: 50%;
+  transform: translateX(-50%) rotate(180deg); /* Rotate the arrow 180 degrees */
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+  z-index: 3;
+}
+
+.card-container .current-card .arrow-indicator {
+  opacity: 1;
+}
 
 
+.card-container .current-card .arrow-indicator {
+  opacity: 1;
+}
 
 .controls {
   margin-top: 20px;
@@ -68,36 +133,13 @@ button:disabled {
   font-size: 20px;
   color: #ff0000;
 }
-/* Highlight effect */
-.current-card {
-  box-shadow: 0 0 15px 5px rgba(255, 215, 0, 0.8); /* Glowing effect */
-  border-radius: 10px;
-}
-
-.arrow-indicator {
-  position: absolute;
-  top: -20px; /* Adjust this value to position the arrow */
-  width: 0;
-  height: 0;
-  border-left: 15px solid transparent;
-  border-right: 15px solid transparent;
-  border-bottom: 20px solid yellow; /* Arrow color */
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0; /* Hidden by default */
-  transition: opacity 0.3s ease-in-out;
-}
-
-.card-container .current-card .arrow-indicator {
-  opacity: 1; /* Show arrow when card is active */
-}
 
 .error-message {
-  text-align: center; /* Center the text */
-  position: relative; /* For positioning the close button */
-  font-size: 36px; /* Larger font size */
-  color: red; /* White text color for contrast */
-  text-align: center; /* Center the text */
+  text-align: center;
+  position: relative;
+  font-size: 36px;
+  color: red;
+  text-align: center;
 }
 
 .close-button {
