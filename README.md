@@ -7,3 +7,5 @@ The Bus is a drinking card game that was virtualised by me which involves going 
 One Day I was in my flat and wanted to play a certain drinking card game but realised that we had no cards, I decided to solve this problem by creating this website.
 
 This is the first personal JS and react project I have worked on.
+
+[You Can Reach It Here](https://fergusshort.github.io/THE-BUS/)
