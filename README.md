@@ -1,11 +1,12 @@
-# The Bus
+# 🚌 The Bus
 
-### What
-The Bus is a drinking card game that was virtualised by me which involves going through the game and guessing if the cards are higher or lower
+## What is *The Bus*?
+**The Bus** is a virtualized version of a popular drinking card game. The game challenges players to guess whether the next card will be higher or lower — simple, engaging, and now completely digital.
 
-### Why
-One Day I was in my flat and wanted to play a certain drinking card game but realised that we had no cards, I decided to solve this problem by creating this website.
+## Why Did I Build It?
+One evening in my flat, we wanted to play a classic drinking card game — but realized we didn’t have any physical cards. Instead of giving up, I decided to turn this into a fun opportunity: I built a web version of the game using **JavaScript** and **React**.
 
-This is the first personal JS and react project I have worked on.
+This was my **first personal JavaScript and React project**, and it kickstarted my journey into web development and interactive user interfaces.
 
-[You Can Reach It Here](https://fergusshort.github.io/THE-BUS/)
+## 🚀 Try It Out
+👉 [Play The Bus](https://fergusshort.github.io/THE-BUS/)
