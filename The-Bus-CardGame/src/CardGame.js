@@ -41,6 +41,8 @@ const PENALTIES = [
 
 const SIPS_PER_DRINK = 8;
 const LS_KEY = 'the-bus-lifetime-sips';
+const CRASH_BEFORE_POPUP_MS = 1000;
+const POPUP_VISIBLE_MS = 2300;
 
 function loadLifetimeSips() {
   try {
@@ -329,10 +331,31 @@ const CSS_KEYFRAMES = `
     50% { transform: translateX(-50%) translateY(-6px); }
   }
 
-@keyframes busBob {
-  0%, 100% { transform: scaleX(-1) translateY(0) rotate(-1deg); }
-  50% { transform: scaleX(-1) translateY(-4px) rotate(1deg); }
-}
+  @keyframes busBob {
+    0%, 100% { transform: scaleX(-1) translateY(0) rotate(-1deg); }
+    50% { transform: scaleX(-1) translateY(-4px) rotate(1deg); }
+  }
+
+  @keyframes busCrash {
+    0% {
+      transform: scaleX(-1) translateX(0) translateY(0) rotate(-1deg);
+    }
+    18% {
+      transform: scaleX(-1) translateX(10px) translateY(0) rotate(2deg);
+    }
+    35% {
+      transform: scaleX(-1) translateX(15px) translateY(-3px) rotate(-9deg);
+    }
+    55% {
+      transform: scaleX(-1) translateX(9px) translateY(2px) rotate(8deg);
+    }
+    75% {
+      transform: scaleX(-1) translateX(4px) translateY(0) rotate(-4deg);
+    }
+    100% {
+      transform: scaleX(-1) translateX(0) translateY(0) rotate(0deg);
+    }
+  }
 
   @keyframes smokeDrift {
     0% { transform: translateX(8px) scale(0.75); opacity: 0; }
@@ -353,6 +376,36 @@ const CSS_KEYFRAMES = `
   @keyframes busGlowPulse {
     0%, 100% { opacity: 0.2; transform: scaleX(0.85); }
     50% { opacity: 0.45; transform: scaleX(1); }
+  }
+
+  @keyframes crashBurst {
+    0% {
+      transform: translateX(-50%) scale(0.2) rotate(0deg);
+      opacity: 0;
+    }
+    25% {
+      transform: translateX(-50%) scale(1.25) rotate(12deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(-50%) scale(0.8) rotate(-10deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes crashBlockShake {
+    0%, 100% {
+      transform: translateX(-50%) rotate(0deg);
+    }
+    25% {
+      transform: translateX(-50%) rotate(-12deg);
+    }
+    50% {
+      transform: translateX(-50%) rotate(10deg);
+    }
+    75% {
+      transform: translateX(-50%) rotate(-6deg);
+    }
   }
 
   @keyframes toastIn {
@@ -607,6 +660,24 @@ const S = {
   sparkle: {
     fontSize: 'clamp(10px, 2.5vw, 15px)',
     animation: 'sparklePop 0.9s ease-in-out infinite',
+  },
+  busCrashBlock: {
+    position: 'absolute',
+    bottom: 'clamp(8px, 2vw, 13px)',
+    transform: 'translateX(-50%)',
+    fontSize: 'clamp(18px, 4.8vw, 28px)',
+    zIndex: 6,
+    animation: 'crashBlockShake 0.65s ease-in-out forwards',
+    filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.45))',
+  },
+  busCrashBurst: {
+    position: 'absolute',
+    bottom: 'clamp(18px, 4vw, 30px)',
+    transform: 'translateX(-50%)',
+    fontSize: 'clamp(24px, 6vw, 38px)',
+    zIndex: 8,
+    animation: 'crashBurst 0.75s ease-out forwards',
+    filter: 'drop-shadow(0 5px 8px rgba(0,0,0,0.4))',
   },
   cardRow: {
     width: '100%',
@@ -903,7 +974,7 @@ const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
   );
 };
 
-const BusRunner = ({ activeIdx }) => {
+const BusRunner = ({ activeIdx, crashing }) => {
   const safeIdx = Math.max(0, Math.min(4, activeIdx));
   const leftPercent = `${10 + safeIdx * 20}%`;
 
@@ -915,13 +986,44 @@ const BusRunner = ({ activeIdx }) => {
         <div style={S.busRoadLine} />
       </div>
 
+      {crashing && (
+        <div
+          style={{
+            ...S.busCrashBlock,
+            left: `calc(${leftPercent} + clamp(20px, 5vw, 32px))`,
+          }}
+        >
+          🚧
+        </div>
+      )}
+
+      {crashing && (
+        <div
+          style={{
+            ...S.busCrashBurst,
+            left: `calc(${leftPercent} + clamp(12px, 3vw, 22px))`,
+          }}
+        >
+          💥
+        </div>
+      )}
+
       <div style={{ ...S.busVehicle, left: leftPercent }}>
         <div style={S.busTrail}>
           <span style={S.smokePuff}>💨</span>
           <span style={S.sparkle}>✨</span>
         </div>
 
-        <div style={S.busEmoji}>🚌</div>
+        <div
+          style={{
+            ...S.busEmoji,
+            animation: crashing
+              ? 'busCrash 0.75s ease-in-out forwards'
+              : 'busBob 0.42s ease-in-out infinite',
+          }}
+        >
+          🚌
+        </div>
       </div>
     </div>
   );
@@ -941,9 +1043,12 @@ const CardGame = () => {
   const [shakeSlot, setShakeSlot] = useState(null);
   const [animKey, setAnimKey] = useState(0);
   const [showRules, setShowRules] = useState(false);
+  const [busCrash, setBusCrash] = useState(false);
+  const [failPending, setFailPending] = useState(false);
   const [lifetimeSips, setLifetimeSips] = useState(() => loadLifetimeSips());
 
   const penaltyTimer = useRef(null);
+  const busCrashTimer = useRef(null);
 
   const drawCard = useCallback((pool, ptr, excludedKeys = new Set()) => {
     const activePool = pool.length > 0 ? pool : FULL_DECK;
@@ -969,6 +1074,10 @@ const CardGame = () => {
 
   const resetBoardForRuleset = useCallback((nextRuleset) => {
     clearTimeout(penaltyTimer.current);
+    clearTimeout(busCrashTimer.current);
+
+    setBusCrash(false);
+    setFailPending(false);
 
     const pool = shuffle(FULL_DECK);
 
@@ -1016,11 +1125,37 @@ const CardGame = () => {
     });
   };
 
-  const failCurrentCard = () => {
+  const failCurrentCard = (afterPenaltyPopup) => {
+    setFailPending(true);
     setShakeSlot(activeIdx);
     setTimeout(() => setShakeSlot(null), 500);
 
-    addPenaltyToTally(activeIdx);
+    clearTimeout(busCrashTimer.current);
+    clearTimeout(penaltyTimer.current);
+
+    setPenalty(null);
+    setBusCrash(false);
+
+    setTimeout(() => {
+      setBusCrash(true);
+    }, 20);
+
+    busCrashTimer.current = setTimeout(() => {
+      setBusCrash(false);
+    }, 850);
+
+    penaltyTimer.current = setTimeout(() => {
+      addPenaltyToTally(activeIdx);
+
+      penaltyTimer.current = setTimeout(() => {
+        setPenalty(null);
+        setFailPending(false);
+
+        if (afterPenaltyPopup) {
+          afterPenaltyPopup();
+        }
+      }, POPUP_VISIBLE_MS);
+    }, CRASH_BEFORE_POPUP_MS);
   };
 
   const handleWellyGuess = (type) => {
@@ -1065,12 +1200,9 @@ const CardGame = () => {
       return;
     }
 
-    failCurrentCard();
-
-    penaltyTimer.current = setTimeout(() => {
-      setPenalty(null);
+    failCurrentCard(() => {
       setActiveIdx(0);
-    }, 2300);
+    });
   };
 
   const handleAucklandGuess = (type) => {
@@ -1125,15 +1257,13 @@ const CardGame = () => {
       return;
     }
 
-    failCurrentCard();
-
-    penaltyTimer.current = setTimeout(() => {
+    failCurrentCard(() => {
       resetBoardForRuleset(RULESETS.AUCKLAND);
-    }, 2300);
+    });
   };
 
   const handleGuess = (type) => {
-    if (gameOver || winner || penalty) return;
+    if (gameOver || winner || penalty || failPending) return;
 
     if (ruleset === RULESETS.AUCKLAND) {
       handleAucklandGuess(type);
@@ -1284,7 +1414,7 @@ const CardGame = () => {
     ];
   };
 
-  const disabled = !!penalty || winner || gameOver;
+  const disabled = !!penalty || winner || gameOver || failPending;
   const controls = getControls();
   const rulesContent = getRulesContent();
 
@@ -1353,7 +1483,7 @@ const CardGame = () => {
       </div>
 
       <div style={S.cardStage}>
-        <BusRunner activeIdx={activeIdx} />
+        <BusRunner activeIdx={activeIdx} crashing={busCrash} />
 
         <div style={S.cardRow}>
           {positions.map((card, i) => (
