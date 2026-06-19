@@ -43,6 +43,9 @@ const SIPS_PER_DRINK = 8;
 const LS_KEY = 'the-bus-lifetime-sips';
 const CRASH_BEFORE_POPUP_MS = 1000;
 const POPUP_VISIBLE_MS = 2300;
+const WIN_ANIMATION_MS = 1600;
+const WIN_POPUP_AFTER_ANIMATION_MS = 500;
+const BUS_ENTER_MS = 850;
 
 function loadLifetimeSips() {
   try {
@@ -331,9 +334,51 @@ const CSS_KEYFRAMES = `
     50% { transform: translateX(-50%) translateY(-6px); }
   }
 
+  @keyframes busEnterVehicle {
+    0% {
+      transform: translateX(calc(-50% - 120vw));
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    72% {
+      transform: translateX(calc(-50% + 8px));
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(-50%);
+      opacity: 1;
+    }
+  }
+
+  @keyframes busDriveOff {
+    0% {
+      transform: translateX(-50%);
+      opacity: 1;
+    }
+    18% {
+      transform: translateX(calc(-50% + 22px));
+      opacity: 1;
+    }
+    45% {
+      transform: translateX(calc(-50% + 120px));
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(calc(-50% + 120vw));
+      opacity: 0;
+    }
+  }
+
   @keyframes busBob {
     0%, 100% { transform: scaleX(-1) translateY(0) rotate(-1deg); }
     50% { transform: scaleX(-1) translateY(-4px) rotate(1deg); }
+  }
+
+  @keyframes busWinBob {
+    0%, 100% { transform: scaleX(-1) translateY(0) rotate(-2deg) scale(1.05); }
+    50% { transform: scaleX(-1) translateY(-7px) rotate(3deg) scale(1.16); }
   }
 
   @keyframes busCrash {
@@ -406,6 +451,52 @@ const CSS_KEYFRAMES = `
     75% {
       transform: translateX(-50%) rotate(-6deg);
     }
+  }
+
+  @keyframes raceFlagSpawn {
+    0% {
+      transform: translateY(12px) rotate(-18deg) scale(0.1);
+      opacity: 0;
+    }
+    22% {
+      transform: translateY(-6px) rotate(8deg) scale(1.25);
+      opacity: 1;
+    }
+    45% {
+      transform: translateY(0) rotate(-6deg) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(0) rotate(7deg) scale(1.08);
+      opacity: 1;
+    }
+  }
+
+  @keyframes winBurst {
+    0% {
+      transform: translateX(-50%) scale(0.1) rotate(0deg);
+      opacity: 0;
+    }
+    20% {
+      transform: translateX(-50%) scale(1.25) rotate(12deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(-50%) scale(1.8) rotate(25deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes winConfettiLeft {
+    0% { transform: translate(0, 0) rotate(0deg) scale(0.8); opacity: 0; }
+    15% { opacity: 1; }
+    100% { transform: translate(-70px, -36px) rotate(-130deg) scale(1.2); opacity: 0; }
+  }
+
+  @keyframes winConfettiRight {
+    0% { transform: translate(0, 0) rotate(0deg) scale(0.8); opacity: 0; }
+    15% { opacity: 1; }
+    100% { transform: translate(70px, -40px) rotate(140deg) scale(1.2); opacity: 0; }
   }
 
   @keyframes toastIn {
@@ -603,6 +694,7 @@ const S = {
     marginBottom: 'clamp(-14px, -2vw, -6px)',
     pointerEvents: 'none',
     flexShrink: 0,
+    overflow: 'visible',
   },
   busGlow: {
     position: 'absolute',
@@ -678,6 +770,40 @@ const S = {
     zIndex: 8,
     animation: 'crashBurst 0.75s ease-out forwards',
     filter: 'drop-shadow(0 5px 8px rgba(0,0,0,0.4))',
+  },
+  raceFlag: {
+    position: 'absolute',
+    right: 'clamp(6px, 2vw, 16px)',
+    bottom: 'clamp(8px, 2vw, 13px)',
+    fontSize: 'clamp(22px, 5.8vw, 36px)',
+    zIndex: 7,
+    animation: 'raceFlagSpawn 1.6s ease-out forwards',
+    filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.45))',
+  },
+  busWinBurst: {
+    position: 'absolute',
+    right: 'clamp(18px, 4vw, 36px)',
+    bottom: 'clamp(18px, 4vw, 30px)',
+    fontSize: 'clamp(28px, 7vw, 44px)',
+    zIndex: 8,
+    animation: 'winBurst 1.2s ease-out forwards',
+    filter: 'drop-shadow(0 5px 8px rgba(0,0,0,0.4))',
+  },
+  busWinConfettiLeft: {
+    position: 'absolute',
+    right: 'clamp(36px, 8vw, 70px)',
+    bottom: 'clamp(24px, 5vw, 38px)',
+    fontSize: 'clamp(18px, 4vw, 26px)',
+    zIndex: 9,
+    animation: 'winConfettiLeft 1.25s ease-out forwards',
+  },
+  busWinConfettiRight: {
+    position: 'absolute',
+    right: 'clamp(24px, 6vw, 48px)',
+    bottom: 'clamp(24px, 5vw, 38px)',
+    fontSize: 'clamp(18px, 4vw, 26px)',
+    zIndex: 9,
+    animation: 'winConfettiRight 1.25s ease-out forwards',
   },
   cardRow: {
     width: '100%',
@@ -974,9 +1100,17 @@ const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
   );
 };
 
-const BusRunner = ({ activeIdx, crashing }) => {
+const BusRunner = ({ activeIdx, crashing, winning, entering }) => {
   const safeIdx = Math.max(0, Math.min(4, activeIdx));
   const leftPercent = `${10 + safeIdx * 20}%`;
+
+  let vehicleAnimation = undefined;
+
+  if (entering) {
+    vehicleAnimation = 'busEnterVehicle 0.85s cubic-bezier(.18,.9,.2,1.15) forwards';
+  } else if (winning) {
+    vehicleAnimation = 'busDriveOff 1.6s ease-in forwards';
+  }
 
   return (
     <div style={S.busTrack}>
@@ -1008,7 +1142,23 @@ const BusRunner = ({ activeIdx, crashing }) => {
         </div>
       )}
 
-      <div style={{ ...S.busVehicle, left: leftPercent }}>
+      {winning && <div style={S.raceFlag}>🏁</div>}
+
+      {winning && (
+        <>
+          <div style={S.busWinBurst}>🏆</div>
+          <div style={S.busWinConfettiLeft}>🎉</div>
+          <div style={S.busWinConfettiRight}>✨</div>
+        </>
+      )}
+
+      <div
+        style={{
+          ...S.busVehicle,
+          left: leftPercent,
+          animation: vehicleAnimation,
+        }}
+      >
         <div style={S.busTrail}>
           <span style={S.smokePuff}>💨</span>
           <span style={S.sparkle}>✨</span>
@@ -1017,9 +1167,11 @@ const BusRunner = ({ activeIdx, crashing }) => {
         <div
           style={{
             ...S.busEmoji,
-            animation: crashing
-              ? 'busCrash 0.75s ease-in-out forwards'
-              : 'busBob 0.42s ease-in-out infinite',
+            animation: winning
+              ? 'busWinBob 0.28s ease-in-out infinite'
+              : crashing
+                ? 'busCrash 0.75s ease-in-out forwards'
+                : 'busBob 0.42s ease-in-out infinite',
           }}
         >
           🚌
@@ -1044,11 +1196,15 @@ const CardGame = () => {
   const [animKey, setAnimKey] = useState(0);
   const [showRules, setShowRules] = useState(false);
   const [busCrash, setBusCrash] = useState(false);
+  const [busWin, setBusWin] = useState(false);
+  const [busEntering, setBusEntering] = useState(false);
   const [failPending, setFailPending] = useState(false);
   const [lifetimeSips, setLifetimeSips] = useState(() => loadLifetimeSips());
 
   const penaltyTimer = useRef(null);
   const busCrashTimer = useRef(null);
+  const busEnterTimer = useRef(null);
+  const winTimer = useRef(null);
 
   const drawCard = useCallback((pool, ptr, excludedKeys = new Set()) => {
     const activePool = pool.length > 0 ? pool : FULL_DECK;
@@ -1075,9 +1231,17 @@ const CardGame = () => {
   const resetBoardForRuleset = useCallback((nextRuleset) => {
     clearTimeout(penaltyTimer.current);
     clearTimeout(busCrashTimer.current);
+    clearTimeout(busEnterTimer.current);
+    clearTimeout(winTimer.current);
 
     setBusCrash(false);
+    setBusWin(false);
+    setBusEntering(true);
     setFailPending(false);
+
+    busEnterTimer.current = setTimeout(() => {
+      setBusEntering(false);
+    }, BUS_ENTER_MS);
 
     const pool = shuffle(FULL_DECK);
 
@@ -1123,6 +1287,24 @@ const CardGame = () => {
       saveLifetimeSips(newTotal);
       return newTotal;
     });
+  };
+
+  const triggerWin = () => {
+    clearTimeout(winTimer.current);
+    clearTimeout(busCrashTimer.current);
+    clearTimeout(penaltyTimer.current);
+    clearTimeout(busEnterTimer.current);
+
+    setGameOver(true);
+    setBusCrash(false);
+    setBusEntering(false);
+    setBusWin(true);
+    setPenalty(null);
+    setFailPending(false);
+
+    winTimer.current = setTimeout(() => {
+      setWinner(true);
+    }, WIN_ANIMATION_MS + WIN_POPUP_AFTER_ANIMATION_MS);
   };
 
   const failCurrentCard = (afterPenaltyPopup) => {
@@ -1187,8 +1369,7 @@ const CardGame = () => {
 
     if (correct) {
       if (activeIdx === 4) {
-        setGameOver(true);
-        setTimeout(() => setWinner(true), 400);
+        triggerWin();
       } else {
         const nextRevealed = [...newRevealed];
         nextRevealed[activeIdx + 1] = true;
@@ -1248,8 +1429,7 @@ const CardGame = () => {
 
     if (correct) {
       if (activeIdx === 4) {
-        setGameOver(true);
-        setTimeout(() => setWinner(true), 400);
+        triggerWin();
       } else {
         setActiveIdx(activeIdx + 1);
       }
@@ -1263,7 +1443,7 @@ const CardGame = () => {
   };
 
   const handleGuess = (type) => {
-    if (gameOver || winner || penalty || failPending) return;
+    if (gameOver || winner || penalty || failPending || busWin) return;
 
     if (ruleset === RULESETS.AUCKLAND) {
       handleAucklandGuess(type);
@@ -1414,7 +1594,7 @@ const CardGame = () => {
     ];
   };
 
-  const disabled = !!penalty || winner || gameOver || failPending;
+  const disabled = !!penalty || winner || gameOver || failPending || busWin;
   const controls = getControls();
   const rulesContent = getRulesContent();
 
@@ -1483,7 +1663,12 @@ const CardGame = () => {
       </div>
 
       <div style={S.cardStage}>
-        <BusRunner activeIdx={activeIdx} crashing={busCrash} />
+        <BusRunner
+          activeIdx={activeIdx}
+          crashing={busCrash}
+          winning={busWin}
+          entering={busEntering}
+        />
 
         <div style={S.cardRow}>
           {positions.map((card, i) => (
