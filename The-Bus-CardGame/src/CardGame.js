@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from './lib/supabaseClient';
 
 const SUITS = [
   { name: 'Spades', sym: '♠', color: 'black' },
@@ -41,11 +42,32 @@ const PENALTIES = [
 
 const SIPS_PER_DRINK = 8;
 const LS_KEY = 'the-bus-lifetime-sips';
+const PLAYER_NAME_COOKIE = 'the_bus_player_name';
+
 const CRASH_BEFORE_POPUP_MS = 1000;
 const POPUP_VISIBLE_MS = 2300;
 const WIN_ANIMATION_MS = 1600;
 const WIN_POPUP_AFTER_ANIMATION_MS = 500;
 const BUS_ENTER_MS = 850;
+
+function getCookie(name) {
+  const cookie = document.cookie
+    .split('; ')
+    .find(row => row.startsWith(`${name}=`));
+
+  if (!cookie) return '';
+
+  try {
+    return decodeURIComponent(cookie.split('=').slice(1).join('=') || '');
+  } catch {
+    return '';
+  }
+}
+
+function setCookie(name, value, days = 365) {
+  const maxAge = days * 24 * 60 * 60;
+  document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${maxAge}; path=/; SameSite=Lax`;
+}
 
 function loadLifetimeSips() {
   try {
@@ -59,6 +81,31 @@ function saveLifetimeSips(n) {
   try {
     localStorage.setItem(LS_KEY, String(n));
   } catch {}
+}
+
+function loadPlayerName() {
+  return getCookie(PLAYER_NAME_COOKIE);
+}
+
+function savePlayerName(name) {
+  setCookie(PLAYER_NAME_COOKIE, name);
+}
+
+function clearPlayerName() {
+  setCookie(PLAYER_NAME_COOKIE, '', -1);
+}
+
+function cleanPlayerName(name) {
+  return name.trim().replace(/\s+/g, ' ').slice(0, 20);
+}
+
+function nameKey(name) {
+  return cleanPlayerName(name).toLowerCase();
+}
+
+function drinksLabelFromSips(sips) {
+  const drinks = Number(sips || 0) / SIPS_PER_DRINK;
+  return `${drinks.toFixed(1)} drinks`;
 }
 
 function shuffle(arr) {
@@ -132,188 +179,812 @@ function getVisibleCardKeys(positions, history) {
   return keys;
 }
 
-const CSS_KEYFRAMES = `
+async function findLeaderboardPlayer(name) {
+  if (!supabase) return null;
+
+  const cleanName = cleanPlayerName(name);
+  if (!cleanName) return null;
+
+  const { data, error } = await supabase
+    .from('sip_leaderboard')
+    .select('name, sips')
+    .eq('name_key', cleanName.toLowerCase())
+    .maybeSingle();
+
+  if (error) throw error;
+  return data || null;
+}
+
+async function ensureOnlinePlayer(name) {
+  if (!supabase) return;
+
+  const cleanName = cleanPlayerName(name);
+  if (!cleanName) return;
+
+  const { error } = await supabase.rpc('ensure_leaderboard_player', {
+    p_name: cleanName,
+  });
+
+  if (error) throw error;
+}
+
+async function addOnlineSips(name, sips) {
+  if (!supabase) return;
+
+  const cleanName = cleanPlayerName(name);
+  if (!cleanName) return;
+
+  const { error } = await supabase.rpc('add_sips_to_leaderboard', {
+    p_name: cleanName,
+    p_sips: sips,
+  });
+
+  if (error) throw error;
+}
+
+async function resetOnlineSips(name) {
+  if (!supabase) return;
+
+  const cleanName = cleanPlayerName(name);
+  if (!cleanName) return;
+
+  const { error } = await supabase.rpc('reset_sips_for_leaderboard', {
+    p_name: cleanName,
+  });
+
+  if (error) throw error;
+}
+
+async function fetchLeaderboard() {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('sip_leaderboard')
+    .select('name, sips, updated_at')
+    .order('sips', { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+
+  return data || [];
+}
+
+const CSS = `
   *, *::before, *::after {
     box-sizing: border-box;
   }
 
-  :root {
-    --app-padding: clamp(10px, 2.5vw, 22px);
-    --layout-gap: clamp(10px, 2.2vh, 18px);
-
-    --title-size: clamp(28px, 8vw, 42px);
-    --title-letter-spacing: clamp(3px, 1.2vw, 5px);
-
-    --top-row-gap: clamp(5px, 1.2vw, 16px);
-
-    --rules-gap: clamp(3px, 0.8vw, 8px);
-    --rules-pad: clamp(3px, 0.8vw, 6px);
-    --rules-btn-pad-y: clamp(6px, 1.2vw, 11px);
-    --rules-btn-pad-x: clamp(5px, 1.8vw, 20px);
-    --rules-font: clamp(8px, 2.4vw, 22px);
-
-    --stats-gap: clamp(5px, 1.6vw, 16px);
-    --stats-pad-y: clamp(6px, 1.4vw, 13px);
-    --stats-pad-x: clamp(6px, 1.8vw, 24px);
-    --stat-num-size: clamp(15px, 4.4vw, 36px);
-    --stat-label-size: clamp(7px, 1.8vw, 15px);
-    --stat-divider-height: clamp(24px, 6vw, 42px);
-    --reset-font: clamp(9px, 1.8vw, 14px);
-    --reset-pad-y: clamp(3px, 1vw, 7px);
-    --reset-pad-x: clamp(5px, 1.3vw, 10px);
-
-    --banner-font: clamp(11px, 3.35vw, 22px);
-    --banner-min-height: clamp(48px, 12vw, 64px);
-    --banner-pad-y: clamp(10px, 2.6vw, 14px);
-    --banner-pad-x: clamp(10px, 3vw, 26px);
-    --banner-max-width: 760px;
-
-    --card-w: clamp(44px, 14.2vw, 90px);
-    --card-h: clamp(62px, 19.9vw, 126px);
-    --card-gap: clamp(8px, 2vw, 20px);
-    --card-radius: clamp(7px, 2vw, 9px);
-    --card-row-pad-top: clamp(30px, 7.5vw, 54px);
-    --card-row-side-pad: clamp(8px, 2vw, 14px);
-    --card-inner-pad: clamp(4px, 1.4vw, 7px);
-    --card-rank-size: clamp(11px, 3.3vw, 17px);
-    --card-suit-size: clamp(9px, 2.9vw, 15px);
-    --card-center-size: clamp(20px, 6.6vw, 34px);
-    --peek-px: clamp(18px, 4.6vw, 34px);
-    --arrow-top: calc(clamp(24px, 7vw, 38px) * -1);
-    --arrow-size: clamp(20px, 6vw, 28px);
-
-    --bus-track-height: clamp(34px, 8vw, 52px);
-    --bus-size: clamp(28px, 7vw, 44px);
-    --bus-road-bottom: clamp(6px, 1.6vw, 10px);
-
-    --btn-gap: clamp(8px, 2vw, 12px);
-    --btn-pad-y: clamp(11px, 3vw, 17px);
-    --btn-pad-x: clamp(16px, 4vw, 28px);
-    --btn-font: clamp(16px, 4.5vw, 21px);
-  }
-
-  @media (orientation: landscape) and (max-height: 560px) {
-    :root {
-      --app-padding: 7px;
-      --layout-gap: 6px;
-
-      --title-size: clamp(22px, 7vh, 34px);
-      --title-letter-spacing: clamp(2px, 0.8vw, 4px);
-
-      --top-row-gap: 8px;
-
-      --rules-gap: 4px;
-      --rules-pad: 4px;
-      --rules-btn-pad-y: 6px;
-      --rules-btn-pad-x: clamp(8px, 1.5vw, 14px);
-      --rules-font: clamp(11px, 3.4vh, 16px);
-
-      --stats-gap: clamp(6px, 1.2vw, 12px);
-      --stats-pad-y: 6px;
-      --stats-pad-x: clamp(8px, 1.5vw, 14px);
-      --stat-num-size: clamp(17px, 5.8vh, 26px);
-      --stat-label-size: clamp(8px, 2.4vh, 11px);
-      --stat-divider-height: clamp(24px, 7vh, 34px);
-      --reset-font: clamp(9px, 2.5vh, 12px);
-      --reset-pad-y: 4px;
-      --reset-pad-x: 7px;
-
-      --banner-font: clamp(13px, 4vh, 18px);
-      --banner-min-height: 36px;
-      --banner-pad-y: 7px;
-      --banner-pad-x: 16px;
-      --banner-max-width: 620px;
-
-      --card-w: clamp(42px, 8.3vw, 72px);
-      --card-h: clamp(59px, 11.6vw, 101px);
-      --card-gap: clamp(8px, 1.4vw, 14px);
-      --card-radius: 7px;
-      --card-row-pad-top: 24px;
-      --card-row-side-pad: 8px;
-      --card-inner-pad: 4px;
-      --card-rank-size: clamp(10px, 3vh, 14px);
-      --card-suit-size: clamp(8px, 2.6vh, 12px);
-      --card-center-size: clamp(18px, 5vh, 28px);
-      --peek-px: 22px;
-      --arrow-top: -24px;
-      --arrow-size: 18px;
-
-      --bus-track-height: 30px;
-      --bus-size: clamp(24px, 7vh, 34px);
-      --bus-road-bottom: 6px;
-
-      --btn-gap: 7px;
-      --btn-pad-y: 8px;
-      --btn-pad-x: clamp(12px, 2vw, 20px);
-      --btn-font: clamp(13px, 4vh, 18px);
-    }
-  }
-
-  @media (orientation: landscape) and (max-height: 410px) {
-    :root {
-      --app-padding: 5px;
-      --layout-gap: 4px;
-
-      --title-size: clamp(20px, 7vh, 28px);
-
-      --rules-btn-pad-y: 5px;
-      --rules-btn-pad-x: 8px;
-      --rules-font: clamp(10px, 3.3vh, 14px);
-
-      --stats-pad-y: 5px;
-      --stats-pad-x: 8px;
-      --stat-num-size: clamp(15px, 5.4vh, 22px);
-      --stat-label-size: clamp(7px, 2.2vh, 10px);
-      --stat-divider-height: 25px;
-
-      --banner-font: clamp(12px, 3.8vh, 16px);
-      --banner-min-height: 32px;
-      --banner-pad-y: 6px;
-      --banner-pad-x: 14px;
-      --banner-max-width: 520px;
-
-      --card-w: clamp(38px, 7.5vw, 62px);
-      --card-h: clamp(54px, 10.5vw, 87px);
-      --card-gap: clamp(7px, 1.2vw, 11px);
-      --card-row-pad-top: 22px;
-      --peek-px: 18px;
-      --arrow-top: -21px;
-      --arrow-size: 16px;
-
-      --bus-track-height: 26px;
-      --bus-size: clamp(22px, 6vh, 30px);
-      --bus-road-bottom: 5px;
-
-      --btn-pad-y: 7px;
-      --btn-pad-x: 12px;
-      --btn-font: clamp(12px, 3.8vh, 16px);
-    }
-  }
-
-  html, body {
+  html, body, #root {
     margin: 0;
     padding: 0;
     width: 100%;
-    min-width: 0;
     height: 100%;
-    overflow: hidden;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-  }
-
-  #root {
-    width: 100%;
-    height: 100%;
-    min-width: 0;
   }
 
   body {
+    overflow: hidden;
+    user-select: none;
+    touch-action: manipulation;
     background-color: #1a5c32;
     background-image:
       repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(0,0,0,0.045) 4px, rgba(0,0,0,0.045) 5px),
       repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,0,0,0.045) 4px, rgba(0,0,0,0.045) 5px),
       radial-gradient(ellipse at center, #226b3a 0%, #0e3d1c 100%);
+  }
+
+  button {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:disabled:not(.rulesToggleBtn) {
+    opacity: 0.65;
+  }
+
+  .rulesToggleBtn:disabled {
+    opacity: 1;
+  }
+
+  .game {
+    width: 100%;
+    height: 100dvh;
+    padding: clamp(10px, 2.5vw, 22px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(8px, 1.8vh, 16px);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    color: white;
+    overflow: hidden;
+  }
+
+  .topLeftButtons {
+    position: fixed;
+    top: clamp(8px, 2vw, 16px);
+    left: clamp(8px, 2vw, 16px);
+    z-index: 80;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .cornerBtn {
+    background: rgba(0,0,0,0.42);
+    border: 1.5px solid rgba(240,208,128,0.65);
+    border-radius: 999px;
+    color: #f0d080;
+    font-size: clamp(12px, 3vw, 15px);
+    font-weight: 800;
+    padding: clamp(6px, 1.5vw, 9px) clamp(9px, 2.4vw, 14px);
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .rulesBtn {
+    position: fixed;
+    top: clamp(8px, 2vw, 16px);
+    right: clamp(8px, 2vw, 16px);
+    z-index: 80;
+  }
+
+  .title {
+    color: #f0d080;
+    font-size: clamp(28px, 8vw, 42px);
+    font-weight: 900;
+    letter-spacing: clamp(3px, 1.2vw, 5px);
+    text-transform: uppercase;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+    margin: 0;
+    line-height: 1;
+  }
+
+  .topMetaRow {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: clamp(5px, 1.2vw, 16px);
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 1180px;
+    min-width: 0;
+  }
+
+  .rulesToggle {
+    display: flex;
+    gap: clamp(3px, 0.8vw, 8px);
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(240,208,128,0.35);
+    border-radius: 13px;
+    padding: clamp(3px, 0.8vw, 6px);
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .rulesToggleBtn {
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: clamp(6px, 1.2vw, 11px) clamp(5px, 1.8vw, 20px);
+    background: transparent;
+    color: rgba(240,208,128,0.75);
+    font-size: clamp(8px, 2.4vw, 22px);
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .rulesToggleBtn.active {
+    background: #f0d080;
+    color: #143d22;
+    border-color: #f0d080;
+    cursor: default;
+  }
+
+  .statsBar {
+    display: flex;
+    align-items: center;
+    gap: clamp(5px, 1.6vw, 16px);
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(240,208,128,0.35);
+    border-radius: 12px;
+    padding: clamp(6px, 1.4vw, 13px) clamp(6px, 1.8vw, 24px);
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .statBlock {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .statNum {
+    color: #f0d080;
+    font-size: clamp(15px, 4.4vw, 36px);
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .statLabel {
+    color: rgba(255,255,255,0.55);
+    font-size: clamp(7px, 1.8vw, 15px);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .statDivider {
+    width: 1px;
+    height: clamp(24px, 6vw, 42px);
+    background: rgba(240,208,128,0.25);
+    flex-shrink: 0;
+  }
+
+  .resetStatsBtn {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 7px;
+    color: rgba(255,255,255,0.55);
+    font-size: clamp(9px, 1.8vw, 14px);
+    padding: clamp(3px, 1vw, 7px) clamp(5px, 1.3vw, 10px);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .banner {
+    position: relative;
+    z-index: 20;
+    background: rgba(0,0,0,0.45);
+    border: 2px solid #f0d080;
+    border-radius: 12px;
+    padding: clamp(10px, 2.6vw, 14px) clamp(10px, 3vw, 26px);
+    color: #fff;
+    font-size: clamp(11px, 3.35vw, 22px);
+    text-align: center;
+    min-height: clamp(48px, 12vw, 64px);
+    width: 100%;
+    max-width: min(760px, calc(100vw - 14px));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.15;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .bannerLine {
+    display: block;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .cardStage {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: calc(100vw - 14px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .busTrack {
+    position: relative;
+    width: min(100%, 620px);
+    height: clamp(34px, 8vw, 52px);
+    margin-top: clamp(14px, 2vh, 24px);
+    margin-bottom: clamp(-14px, -2vw, -6px);
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .busGlow {
+    position: absolute;
+    left: 7%;
+    right: 7%;
+    bottom: 0;
+    height: clamp(12px, 2vw, 18px);
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(240,208,128,0.35), transparent 70%);
+    animation: busGlowPulse 1.1s ease-in-out infinite;
+  }
+
+  .busRoad {
+    position: absolute;
+    left: 7%;
+    right: 7%;
+    bottom: clamp(6px, 1.6vw, 10px);
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, rgba(240,208,128,0.75), transparent);
+    box-shadow: 0 0 14px rgba(240,208,128,0.38);
+    overflow: hidden;
+  }
+
+  .busRoadLine {
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 18px, transparent 18px 34px);
+    opacity: 0.5;
+    animation: roadMove 0.8s linear infinite;
+  }
+
+  .busVehicle {
+    position: absolute;
+    bottom: clamp(8px, 2vw, 13px);
+    transform: translateX(-50%);
+    transition: left 0.55s cubic-bezier(.2, .9, .25, 1.25);
+    filter: drop-shadow(0 8px 8px rgba(0,0,0,0.45));
+    z-index: 5;
+  }
+
+  .busVehicle.enteringLeft {
+    animation: busEnterVehicle 0.85s cubic-bezier(.18,.9,.2,1.15) forwards;
+  }
+
+  .busVehicle.enteringRight {
+    animation: busEnterRightVehicle 0.85s cubic-bezier(.18,.9,.2,1.15) forwards;
+  }
+
+  .busVehicle.winning {
+    animation: busDriveOff 1.6s ease-in forwards;
+  }
+
+  .busEmoji {
+    font-size: clamp(28px, 7vw, 44px);
+    animation: busBob 0.42s ease-in-out infinite;
+  }
+
+  .busEmoji.crashing {
+    animation: busCrash 0.75s ease-in-out forwards;
+  }
+
+  .busEmoji.winning {
+    animation: busWinBob 0.28s ease-in-out infinite;
+  }
+
+  .busTrail {
+    position: absolute;
+    right: 68%;
+    top: 35%;
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    opacity: 0.85;
+  }
+
+  .smokePuff {
+    font-size: clamp(13px, 3.2vw, 18px);
+    animation: smokeDrift 0.75s ease-in-out infinite;
+  }
+
+  .sparkle {
+    font-size: clamp(10px, 2.5vw, 15px);
+    animation: sparklePop 0.9s ease-in-out infinite;
+  }
+
+  .crashBlock {
+    position: absolute;
+    bottom: clamp(8px, 2vw, 13px);
+    transform: translateX(-50%);
+    font-size: clamp(18px, 4.8vw, 28px);
+    z-index: 6;
+    animation: crashBlockShake 0.65s ease-in-out forwards;
+    filter: drop-shadow(0 5px 7px rgba(0,0,0,0.45));
+  }
+
+  .crashBurst {
+    position: absolute;
+    bottom: clamp(18px, 4vw, 30px);
+    transform: translateX(-50%);
+    font-size: clamp(24px, 6vw, 38px);
+    z-index: 8;
+    animation: crashBurst 0.75s ease-out forwards;
+    filter: drop-shadow(0 5px 8px rgba(0,0,0,0.4));
+  }
+
+  .raceFlag {
+    position: absolute;
+    right: clamp(6px, 2vw, 16px);
+    bottom: clamp(8px, 2vw, 13px);
+    font-size: clamp(22px, 5.8vw, 36px);
+    z-index: 7;
+    animation: raceFlagSpawn 1.6s ease-out forwards;
+    filter: drop-shadow(0 5px 7px rgba(0,0,0,0.45));
+  }
+
+  .winBurst {
+    position: absolute;
+    right: clamp(18px, 4vw, 36px);
+    bottom: clamp(18px, 4vw, 30px);
+    font-size: clamp(28px, 7vw, 44px);
+    z-index: 8;
+    animation: winBurst 1.2s ease-out forwards;
+  }
+
+  .confettiLeft {
+    position: absolute;
+    right: clamp(36px, 8vw, 70px);
+    bottom: clamp(24px, 5vw, 38px);
+    font-size: clamp(18px, 4vw, 26px);
+    z-index: 9;
+    animation: winConfettiLeft 1.25s ease-out forwards;
+  }
+
+  .confettiRight {
+    position: absolute;
+    right: clamp(24px, 6vw, 48px);
+    bottom: clamp(24px, 5vw, 38px);
+    font-size: clamp(18px, 4vw, 26px);
+    z-index: 9;
+    animation: winConfettiRight 1.25s ease-out forwards;
+  }
+
+  .cardRow {
+    width: 100%;
+    max-width: calc(100vw - 14px);
+    display: flex;
+    gap: clamp(8px, 2vw, 20px);
+    align-items: flex-end;
+    justify-content: center;
+    padding-top: clamp(30px, 7.5vw, 54px);
+    padding-left: clamp(8px, 2vw, 14px);
+    padding-right: clamp(8px, 2vw, 14px);
+    overflow: visible;
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  .slotShell {
+    position: relative;
+    width: clamp(44px, 14.2vw, 90px);
+    flex-shrink: 0;
+  }
+
+  .card {
+    width: clamp(44px, 14.2vw, 90px);
+    height: clamp(62px, 19.9vw, 126px);
+    border-radius: clamp(7px, 2vw, 9px);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .cardFront {
+    background: #fff;
+    border: 2px solid #bbb;
+  }
+
+  .cardBack {
+    border: 2px solid #0a2244;
+    background: #1a3a6b;
+  }
+
+  .cardBackPattern {
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 2px, transparent 2px, transparent 9px);
+  }
+
+  .cardInner {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: clamp(4px, 1.4vw, 7px);
+  }
+
+  .corner {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    line-height: 1.05;
+  }
+
+  .corner.br {
+    align-items: flex-end;
+    transform: rotate(180deg);
+  }
+
+  .rank {
+    font-size: clamp(11px, 3.3vw, 17px);
+    font-weight: 900;
+  }
+
+  .suit {
+    font-size: clamp(9px, 2.9vw, 15px);
+  }
+
+  .centerSuit {
+    font-size: clamp(20px, 6.6vw, 34px);
+  }
+
+  .activeCard {
+    box-shadow: 0 0 0 3px #f0d080, 0 8px 28px rgba(0,0,0,0.55);
+  }
+
+  .inactiveCard {
+    box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+  }
+
+  .cardTop {
+    position: absolute;
+    left: 0;
+    z-index: 2;
+    border-radius: clamp(7px, 2vw, 9px);
+  }
+
+  .prevCard {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    filter: brightness(0.7);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+
+  .arrow {
+    position: absolute;
+    top: calc(clamp(24px, 7vw, 38px) * -1);
+    left: 50%;
+    transform: translateX(-50%);
+    color: #f0d080;
+    font-size: clamp(20px, 6vw, 28px);
+    animation: bounce 0.9s ease-in-out infinite;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .flipIn {
+    animation: flipIn 0.35s ease forwards;
+  }
+
+  .shake {
+    animation: shake 0.4s ease;
+  }
+
+  .controls {
+    display: flex;
+    gap: clamp(8px, 2vw, 12px);
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 720px;
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .btn {
+    padding: clamp(11px, 3vw, 17px) clamp(16px, 4vw, 28px);
+    font-size: clamp(16px, 4.5vw, 21px);
+    font-weight: 900;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  .btnHigher { background: #2a9d4e; color: #fff; border-color: #1d7038; }
+  .btnLower { background: #c0392b; color: #fff; border-color: #922b21; }
+  .btnEven { background: #2471a3; color: #fff; border-color: #1a5276; }
+  .btnOdd { background: #8e44ad; color: #fff; border-color: #633076; }
+  .btnRed { background: #c0392b; color: #fff; border-color: #922b21; }
+  .btnBlack { background: #222; color: #fff; border-color: #000; }
+  .btnRestart { background: rgba(255,255,255,0.15); color: #f0d080; border-color: #f0d080; }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    z-index: 300;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .modal {
+    width: min(560px, 92vw);
+    max-height: 82dvh;
+    overflow-y: auto;
+    background: #123d24;
+    border: 3px solid #f0d080;
+    border-radius: 20px;
+    padding: clamp(18px, 4vw, 28px);
+    box-shadow: 0 16px 50px rgba(0,0,0,0.5);
+  }
+
+  .modalTitle {
+    color: #f0d080;
+    font-size: clamp(24px, 6vw, 34px);
+    font-weight: 900;
+    text-align: center;
+    margin-bottom: 14px;
+    letter-spacing: 1px;
+  }
+
+  .modalSub {
+    color: rgba(255,255,255,0.75);
+    text-align: center;
+    font-size: clamp(13px, 3.5vw, 16px);
+    margin-bottom: 14px;
+    line-height: 1.35;
+  }
+
+  .loginModalRow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  .loginInput {
+    width: min(280px, 70vw);
+    background: rgba(0,0,0,0.35);
+    border: 1.5px solid rgba(240,208,128,0.55);
+    border-radius: 999px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    outline: none;
+    padding: 11px 15px;
+  }
+
+  .smallBtn {
+    background: rgba(240,208,128,0.95);
+    color: #143d22;
+    border: 1px solid #f0d080;
+    border-radius: 999px;
+    padding: 11px 15px;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
+  .rulesList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .rulesLine {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    color: #fff;
+    font-size: clamp(14px, 3.6vw, 17px);
+    line-height: 1.35;
+  }
+
+  .rulesBullet {
+    color: #f0d080;
+    font-weight: 900;
+    flex-shrink: 0;
+  }
+
+  .modalActions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+
+  .leaderboardList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .leaderboardRow {
+    display: grid;
+    grid-template-columns: 38px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    background: rgba(0,0,0,0.28);
+    border: 1px solid rgba(240,208,128,0.25);
+    border-radius: 12px;
+    padding: 10px 12px;
+    color: #fff;
+  }
+
+  .leaderboardRank {
+    color: #f0d080;
+    font-weight: 900;
+    font-size: 16px;
+  }
+
+  .leaderboardName {
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .leaderboardSips {
+    color: #f0d080;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .status {
+    color: rgba(255,255,255,0.75);
+    text-align: center;
+    padding: 16px;
+    font-weight: 700;
+  }
+
+  .penaltyToast {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(160,20,20,0.97);
+    border: 2px solid #ff7070;
+    border-radius: 18px;
+    padding: 24px 48px;
+    text-align: center;
+    z-index: 100;
+    animation: toastIn 0.3s ease, toastOut 0.35s ease 1.9s forwards;
+    pointer-events: none;
+    max-width: 80vw;
+  }
+
+  .penaltyMsg {
+    color: #fff;
+    font-size: clamp(26px,6vw,40px);
+    font-weight: 900;
+  }
+
+  .penaltySub {
+    color: rgba(255,255,255,0.75);
+    font-size: 16px;
+    margin-top: 5px;
+  }
+
+  .winnerOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    animation: fadeIn 0.4s ease;
+    padding: 20px;
+  }
+
+  .winnerBox {
+    background: #1a6b3a;
+    border: 3px solid #f0d080;
+    border-radius: 22px;
+    padding: clamp(34px,6vw,52px) clamp(40px,8vw,76px);
+    text-align: center;
+  }
+
+  .winnerText {
+    color: #f0d080;
+    font-size: clamp(32px,7vw,46px);
+    font-weight: 900;
+    letter-spacing: 4px;
+  }
+
+  .winnerSub {
+    color: rgba(255,255,255,0.8);
+    font-size: 18px;
+    margin-top: 8px;
   }
 
   @keyframes flipIn {
@@ -335,40 +1006,24 @@ const CSS_KEYFRAMES = `
   }
 
   @keyframes busEnterVehicle {
-    0% {
-      transform: translateX(calc(-50% - 120vw));
-      opacity: 0;
-    }
-    15% {
-      opacity: 1;
-    }
-    72% {
-      transform: translateX(calc(-50% + 8px));
-      opacity: 1;
-    }
-    100% {
-      transform: translateX(-50%);
-      opacity: 1;
-    }
+    0% { transform: translateX(calc(-50% - 120vw)); opacity: 0; }
+    15% { opacity: 1; }
+    72% { transform: translateX(calc(-50% + 8px)); opacity: 1; }
+    100% { transform: translateX(-50%); opacity: 1; }
+  }
+
+  @keyframes busEnterRightVehicle {
+    0% { transform: translateX(calc(-50% + 120vw)); opacity: 0; }
+    15% { opacity: 1; }
+    72% { transform: translateX(calc(-50% - 8px)); opacity: 1; }
+    100% { transform: translateX(-50%); opacity: 1; }
   }
 
   @keyframes busDriveOff {
-    0% {
-      transform: translateX(-50%);
-      opacity: 1;
-    }
-    18% {
-      transform: translateX(calc(-50% + 22px));
-      opacity: 1;
-    }
-    45% {
-      transform: translateX(calc(-50% + 120px));
-      opacity: 1;
-    }
-    100% {
-      transform: translateX(calc(-50% + 120vw));
-      opacity: 0;
-    }
+    0% { transform: translateX(-50%); opacity: 1; }
+    18% { transform: translateX(calc(-50% + 22px)); opacity: 1; }
+    45% { transform: translateX(calc(-50% + 120px)); opacity: 1; }
+    100% { transform: translateX(calc(-50% + 120vw)); opacity: 0; }
   }
 
   @keyframes busBob {
@@ -382,24 +1037,12 @@ const CSS_KEYFRAMES = `
   }
 
   @keyframes busCrash {
-    0% {
-      transform: scaleX(-1) translateX(0) translateY(0) rotate(-1deg);
-    }
-    18% {
-      transform: scaleX(-1) translateX(10px) translateY(0) rotate(2deg);
-    }
-    35% {
-      transform: scaleX(-1) translateX(15px) translateY(-3px) rotate(-9deg);
-    }
-    55% {
-      transform: scaleX(-1) translateX(9px) translateY(2px) rotate(8deg);
-    }
-    75% {
-      transform: scaleX(-1) translateX(4px) translateY(0) rotate(-4deg);
-    }
-    100% {
-      transform: scaleX(-1) translateX(0) translateY(0) rotate(0deg);
-    }
+    0% { transform: scaleX(-1) translateX(0) translateY(0) rotate(-1deg); }
+    18% { transform: scaleX(-1) translateX(10px) translateY(0) rotate(2deg); }
+    35% { transform: scaleX(-1) translateX(15px) translateY(-3px) rotate(-9deg); }
+    55% { transform: scaleX(-1) translateX(9px) translateY(2px) rotate(8deg); }
+    75% { transform: scaleX(-1) translateX(4px) translateY(0) rotate(-4deg); }
+    100% { transform: scaleX(-1) translateX(0) translateY(0) rotate(0deg); }
   }
 
   @keyframes smokeDrift {
@@ -424,67 +1067,29 @@ const CSS_KEYFRAMES = `
   }
 
   @keyframes crashBurst {
-    0% {
-      transform: translateX(-50%) scale(0.2) rotate(0deg);
-      opacity: 0;
-    }
-    25% {
-      transform: translateX(-50%) scale(1.25) rotate(12deg);
-      opacity: 1;
-    }
-    100% {
-      transform: translateX(-50%) scale(0.8) rotate(-10deg);
-      opacity: 0;
-    }
+    0% { transform: translateX(-50%) scale(0.2) rotate(0deg); opacity: 0; }
+    25% { transform: translateX(-50%) scale(1.25) rotate(12deg); opacity: 1; }
+    100% { transform: translateX(-50%) scale(0.8) rotate(-10deg); opacity: 0; }
   }
 
   @keyframes crashBlockShake {
-    0%, 100% {
-      transform: translateX(-50%) rotate(0deg);
-    }
-    25% {
-      transform: translateX(-50%) rotate(-12deg);
-    }
-    50% {
-      transform: translateX(-50%) rotate(10deg);
-    }
-    75% {
-      transform: translateX(-50%) rotate(-6deg);
-    }
+    0%, 100% { transform: translateX(-50%) rotate(0deg); }
+    25% { transform: translateX(-50%) rotate(-12deg); }
+    50% { transform: translateX(-50%) rotate(10deg); }
+    75% { transform: translateX(-50%) rotate(-6deg); }
   }
 
   @keyframes raceFlagSpawn {
-    0% {
-      transform: translateY(12px) rotate(-18deg) scale(0.1);
-      opacity: 0;
-    }
-    22% {
-      transform: translateY(-6px) rotate(8deg) scale(1.25);
-      opacity: 1;
-    }
-    45% {
-      transform: translateY(0) rotate(-6deg) scale(1);
-      opacity: 1;
-    }
-    100% {
-      transform: translateY(0) rotate(7deg) scale(1.08);
-      opacity: 1;
-    }
+    0% { transform: translateY(12px) rotate(-18deg) scale(0.1); opacity: 0; }
+    22% { transform: translateY(-6px) rotate(8deg) scale(1.25); opacity: 1; }
+    45% { transform: translateY(0) rotate(-6deg) scale(1); opacity: 1; }
+    100% { transform: translateY(0) rotate(7deg) scale(1.08); opacity: 1; }
   }
 
   @keyframes winBurst {
-    0% {
-      transform: translateX(-50%) scale(0.1) rotate(0deg);
-      opacity: 0;
-    }
-    20% {
-      transform: translateX(-50%) scale(1.25) rotate(12deg);
-      opacity: 1;
-    }
-    100% {
-      transform: translateX(-50%) scale(1.8) rotate(25deg);
-      opacity: 0;
-    }
+    0% { transform: translateX(-50%) scale(0.1) rotate(0deg); opacity: 0; }
+    20% { transform: translateX(-50%) scale(1.25) rotate(12deg); opacity: 1; }
+    100% { transform: translateX(-50%) scale(1.8) rotate(25deg); opacity: 0; }
   }
 
   @keyframes winConfettiLeft {
@@ -513,586 +1118,94 @@ const CSS_KEYFRAMES = `
     to { opacity: 1; }
   }
 
-  button {
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-  }
+  @media (orientation: landscape) and (max-height: 560px) {
+    .game {
+      padding: 7px;
+      gap: 6px;
+    }
 
-  button:disabled {
-    opacity: 0.75;
+    .title {
+      font-size: clamp(22px, 7vh, 34px);
+    }
+
+    .banner {
+      min-height: 36px;
+      padding: 7px 16px;
+      font-size: clamp(13px, 4vh, 18px);
+      max-width: min(620px, calc(100vw - 14px));
+    }
+
+    .card {
+      width: clamp(42px, 8.3vw, 72px);
+      height: clamp(59px, 11.6vw, 101px);
+    }
+
+    .slotShell {
+      width: clamp(42px, 8.3vw, 72px);
+    }
+
+    .cardRow {
+      gap: clamp(8px, 1.4vw, 14px);
+      padding-top: 24px;
+    }
+
+    .btn {
+      padding: 8px clamp(12px, 2vw, 20px);
+      font-size: clamp(13px, 4vh, 18px);
+    }
   }
 `;
 
-const S = {
-  wrap: {
-    width: '100%',
-    height: '100dvh',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 'var(--layout-gap)',
-    padding: 'var(--app-padding)',
-    fontFamily: "'Segoe UI', system-ui, sans-serif",
-    background: 'transparent',
-    overflowX: 'hidden',
-    overflowY: 'auto',
-    WebkitOverflowScrolling: 'touch',
-    minWidth: 0,
-  },
-  cornerRulesBtn: {
-    position: 'fixed',
-    top: 'clamp(8px, 2vw, 16px)',
-    right: 'clamp(8px, 2vw, 16px)',
-    zIndex: 80,
-    background: 'rgba(0,0,0,0.42)',
-    border: '1.5px solid rgba(240,208,128,0.65)',
-    borderRadius: 999,
-    color: '#f0d080',
-    fontSize: 'clamp(12px, 3vw, 15px)',
-    fontWeight: 800,
-    padding: 'clamp(6px, 1.5vw, 9px) clamp(9px, 2.4vw, 14px)',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
-  },
-  title: {
-    color: '#f0d080',
-    fontSize: 'var(--title-size)',
-    fontWeight: 800,
-    letterSpacing: 'var(--title-letter-spacing)',
-    textTransform: 'uppercase',
-    textShadow: '0 2px 12px rgba(0,0,0,0.6)',
-    margin: 0,
-    lineHeight: 1,
-    flexShrink: 0,
-  },
-  topMetaRow: {
-    display: 'flex',
-    alignItems: 'stretch',
-    justifyContent: 'center',
-    gap: 'var(--top-row-gap)',
-    flexWrap: 'nowrap',
-    width: '100%',
-    maxWidth: 1180,
-    minWidth: 0,
-    flexShrink: 0,
-  },
-  rulesToggle: {
-    display: 'flex',
-    gap: 'var(--rules-gap)',
-    background: 'rgba(0,0,0,0.35)',
-    border: '1px solid rgba(240,208,128,0.35)',
-    borderRadius: 13,
-    padding: 'var(--rules-pad)',
-    minWidth: 0,
-    flexShrink: 1,
-  },
-  rulesToggleBtn: {
-    border: '1px solid transparent',
-    borderRadius: 9,
-    padding: 'var(--rules-btn-pad-y) var(--rules-btn-pad-x)',
-    background: 'transparent',
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 'var(--rules-font)',
-    fontWeight: 800,
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-  },
-  rulesToggleBtnActive: {
-    background: '#f0d080',
-    color: '#143d22',
-    borderColor: '#f0d080',
-    cursor: 'default',
-  },
-  statsBar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 'var(--stats-gap)',
-    background: 'rgba(0,0,0,0.4)',
-    border: '1px solid rgba(240,208,128,0.35)',
-    borderRadius: 12,
-    padding: 'var(--stats-pad-y) var(--stats-pad-x)',
-    minWidth: 0,
-    flexShrink: 1,
-  },
-  statBlock: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 2,
-    minWidth: 0,
-  },
-  statNum: {
-    color: '#f0d080',
-    fontSize: 'var(--stat-num-size)',
-    fontWeight: 800,
-    lineHeight: 1,
-  },
-  statLabel: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 'var(--stat-label-size)',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    whiteSpace: 'nowrap',
-  },
-  statDivider: {
-    width: 1,
-    height: 'var(--stat-divider-height)',
-    background: 'rgba(240,208,128,0.25)',
-    flexShrink: 0,
-  },
-  resetStatsBtn: {
-    marginLeft: 0,
-    background: 'none',
-    border: '1px solid rgba(255,255,255,0.2)',
-    borderRadius: 7,
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 'var(--reset-font)',
-    padding: 'var(--reset-pad-y) var(--reset-pad-x)',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    flexShrink: 0,
-  },
-  banner: {
-    background: 'rgba(0,0,0,0.45)',
-    border: '2px solid #f0d080',
-    borderRadius: 12,
-    padding: 'var(--banner-pad-y) var(--banner-pad-x)',
-    color: '#fff',
-    fontSize: 'var(--banner-font)',
-    textAlign: 'center',
-    minHeight: 'var(--banner-min-height)',
-    width: '100%',
-    maxWidth: 'min(var(--banner-max-width), calc(100vw - 14px))',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    lineHeight: 1.15,
-    overflow: 'hidden',
-    flexShrink: 0,
-  },
-  bannerLine: {
-    display: 'block',
-    width: '100%',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'clip',
-  },
-  cardStage: {
-    width: '100%',
-    maxWidth: 'calc(100vw - 14px)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  busTrack: {
-    position: 'relative',
-    width: 'min(100%, 620px)',
-    height: 'var(--bus-track-height)',
-    marginBottom: 'clamp(-14px, -2vw, -6px)',
-    pointerEvents: 'none',
-    flexShrink: 0,
-    overflow: 'visible',
-  },
-  busGlow: {
-    position: 'absolute',
-    left: '7%',
-    right: '7%',
-    bottom: 0,
-    height: 'clamp(12px, 2vw, 18px)',
-    borderRadius: '50%',
-    background: 'radial-gradient(ellipse at center, rgba(240,208,128,0.35), transparent 70%)',
-    animation: 'busGlowPulse 1.1s ease-in-out infinite',
-  },
-  busRoad: {
-    position: 'absolute',
-    left: '7%',
-    right: '7%',
-    bottom: 'var(--bus-road-bottom)',
-    height: 4,
-    borderRadius: 999,
-    background: 'linear-gradient(90deg, transparent, rgba(240,208,128,0.75), transparent)',
-    boxShadow: '0 0 14px rgba(240,208,128,0.38)',
-    overflow: 'hidden',
-  },
-  busRoadLine: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 18px, transparent 18px 34px)',
-    opacity: 0.5,
-    animation: 'roadMove 0.8s linear infinite',
-  },
-  busVehicle: {
-    position: 'absolute',
-    bottom: 'clamp(8px, 2vw, 13px)',
-    transform: 'translateX(-50%)',
-    transition: 'left 0.55s cubic-bezier(.2, .9, .25, 1.25)',
-    filter: 'drop-shadow(0 8px 8px rgba(0,0,0,0.45))',
-    zIndex: 5,
-  },
-  busEmoji: {
-    fontSize: 'var(--bus-size)',
-    animation: 'busBob 0.42s ease-in-out infinite',
-  },
-  busTrail: {
-    position: 'absolute',
-    right: '68%',
-    top: '35%',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 1,
-    opacity: 0.85,
-  },
-  smokePuff: {
-    fontSize: 'clamp(13px, 3.2vw, 18px)',
-    animation: 'smokeDrift 0.75s ease-in-out infinite',
-  },
-  sparkle: {
-    fontSize: 'clamp(10px, 2.5vw, 15px)',
-    animation: 'sparklePop 0.9s ease-in-out infinite',
-  },
-  busCrashBlock: {
-    position: 'absolute',
-    bottom: 'clamp(8px, 2vw, 13px)',
-    transform: 'translateX(-50%)',
-    fontSize: 'clamp(18px, 4.8vw, 28px)',
-    zIndex: 6,
-    animation: 'crashBlockShake 0.65s ease-in-out forwards',
-    filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.45))',
-  },
-  busCrashBurst: {
-    position: 'absolute',
-    bottom: 'clamp(18px, 4vw, 30px)',
-    transform: 'translateX(-50%)',
-    fontSize: 'clamp(24px, 6vw, 38px)',
-    zIndex: 8,
-    animation: 'crashBurst 0.75s ease-out forwards',
-    filter: 'drop-shadow(0 5px 8px rgba(0,0,0,0.4))',
-  },
-  raceFlag: {
-    position: 'absolute',
-    right: 'clamp(6px, 2vw, 16px)',
-    bottom: 'clamp(8px, 2vw, 13px)',
-    fontSize: 'clamp(22px, 5.8vw, 36px)',
-    zIndex: 7,
-    animation: 'raceFlagSpawn 1.6s ease-out forwards',
-    filter: 'drop-shadow(0 5px 7px rgba(0,0,0,0.45))',
-  },
-  busWinBurst: {
-    position: 'absolute',
-    right: 'clamp(18px, 4vw, 36px)',
-    bottom: 'clamp(18px, 4vw, 30px)',
-    fontSize: 'clamp(28px, 7vw, 44px)',
-    zIndex: 8,
-    animation: 'winBurst 1.2s ease-out forwards',
-    filter: 'drop-shadow(0 5px 8px rgba(0,0,0,0.4))',
-  },
-  busWinConfettiLeft: {
-    position: 'absolute',
-    right: 'clamp(36px, 8vw, 70px)',
-    bottom: 'clamp(24px, 5vw, 38px)',
-    fontSize: 'clamp(18px, 4vw, 26px)',
-    zIndex: 9,
-    animation: 'winConfettiLeft 1.25s ease-out forwards',
-  },
-  busWinConfettiRight: {
-    position: 'absolute',
-    right: 'clamp(24px, 6vw, 48px)',
-    bottom: 'clamp(24px, 5vw, 38px)',
-    fontSize: 'clamp(18px, 4vw, 26px)',
-    zIndex: 9,
-    animation: 'winConfettiRight 1.25s ease-out forwards',
-  },
-  cardRow: {
-    width: '100%',
-    maxWidth: 'calc(100vw - 14px)',
-    display: 'flex',
-    gap: 'var(--card-gap)',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    paddingTop: 'var(--card-row-pad-top)',
-    paddingLeft: 'var(--card-row-side-pad)',
-    paddingRight: 'var(--card-row-side-pad)',
-    overflow: 'visible',
-    minWidth: 0,
-    flexShrink: 0,
-  },
-  cardFront: {
-    width: 'var(--card-w)',
-    height: 'var(--card-h)',
-    background: '#fff',
-    borderRadius: 'var(--card-radius)',
-    border: '2px solid #bbb',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  cardBack: {
-    width: 'var(--card-w)',
-    height: 'var(--card-h)',
-    borderRadius: 'var(--card-radius)',
-    border: '2px solid #0a2244',
-    background: '#1a3a6b',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  cardBackPattern: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage:
-      'repeating-linear-gradient(45deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 2px, transparent 2px, transparent 9px)',
-  },
-  cardInner: {
-    width: '100%',
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 'var(--card-inner-pad)',
-  },
-  cardCornerTL: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    width: '100%',
-    lineHeight: 1.05,
-  },
-  cardCornerBR: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    width: '100%',
-    lineHeight: 1.05,
-    transform: 'rotate(180deg)',
-    alignSelf: 'flex-end',
-  },
-  cardRank: {
-    fontSize: 'var(--card-rank-size)',
-    fontWeight: 800,
-  },
-  cardSuit: {
-    fontSize: 'var(--card-suit-size)',
-  },
-  cardCenter: {
-    fontSize: 'var(--card-center-size)',
-  },
-  arrow: {
-    position: 'absolute',
-    top: 'var(--arrow-top)',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    color: '#f0d080',
-    fontSize: 'var(--arrow-size)',
-    animation: 'bounce 0.9s ease-in-out infinite',
-    zIndex: 20,
-    pointerEvents: 'none',
-  },
-  controls: {
-    display: 'flex',
-    gap: 'var(--btn-gap)',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    maxWidth: 720,
-    width: '100%',
-    flexShrink: 0,
-  },
-  btn: {
-    padding: 'var(--btn-pad-y) var(--btn-pad-x)',
-    fontSize: 'var(--btn-font)',
-    fontWeight: 800,
-    borderRadius: 12,
-    border: '2px solid transparent',
-    cursor: 'pointer',
-    letterSpacing: 0.5,
-    transition: 'opacity 0.15s, transform 0.1s',
-    touchAction: 'manipulation',
-    whiteSpace: 'nowrap',
-  },
-  btnHigher: { background: '#2a9d4e', color: '#fff', borderColor: '#1d7038' },
-  btnLower: { background: '#c0392b', color: '#fff', borderColor: '#922b21' },
-  btnEven: { background: '#2471a3', color: '#fff', borderColor: '#1a5276' },
-  btnOdd: { background: '#8e44ad', color: '#fff', borderColor: '#633076' },
-  btnRed: { background: '#c0392b', color: '#fff', borderColor: '#922b21' },
-  btnBlack: { background: '#222', color: '#fff', borderColor: '#000' },
-  btnRestart: { background: 'rgba(255,255,255,0.15)', color: '#f0d080', borderColor: '#f0d080' },
-  rulesOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.72)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-    zIndex: 300,
-    animation: 'fadeIn 0.2s ease',
-  },
-  rulesBox: {
-    width: 'min(560px, 92vw)',
-    maxHeight: '82dvh',
-    overflowY: 'auto',
-    background: '#123d24',
-    border: '3px solid #f0d080',
-    borderRadius: 20,
-    padding: 'clamp(18px, 4vw, 28px)',
-    boxShadow: '0 16px 50px rgba(0,0,0,0.5)',
-  },
-  rulesTitle: {
-    color: '#f0d080',
-    fontSize: 'clamp(24px, 6vw, 34px)',
-    fontWeight: 900,
-    textAlign: 'center',
-    marginBottom: 14,
-    letterSpacing: 1,
-  },
-  rulesList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-  },
-  rulesLine: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 9,
-    color: '#fff',
-    fontSize: 'clamp(14px, 3.6vw, 17px)',
-    lineHeight: 1.35,
-  },
-  rulesBullet: {
-    color: '#f0d080',
-    fontWeight: 900,
-    flexShrink: 0,
-  },
-  rulesCloseBtn: {
-    display: 'block',
-    margin: '20px auto 0',
-  },
-  penaltyToast: {
-    position: 'fixed',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    background: 'rgba(160,20,20,0.97)',
-    border: '2px solid #ff7070',
-    borderRadius: 18,
-    padding: '24px 48px',
-    textAlign: 'center',
-    zIndex: 100,
-    animation: 'toastIn 0.3s ease, toastOut 0.35s ease 1.9s forwards',
-    pointerEvents: 'none',
-    maxWidth: '80vw',
-  },
-  penaltyMsg: {
-    color: '#fff',
-    fontSize: 'clamp(26px,6vw,40px)',
-    fontWeight: 800,
-  },
-  penaltySub: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 16,
-    marginTop: 5,
-  },
-  winnerOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.72)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 200,
-    animation: 'fadeIn 0.4s ease',
-    padding: 20,
-  },
-  winnerBox: {
-    background: '#1a6b3a',
-    border: '3px solid #f0d080',
-    borderRadius: 22,
-    padding: 'clamp(34px,6vw,52px) clamp(40px,8vw,76px)',
-    textAlign: 'center',
-  },
-  winnerText: {
-    color: '#f0d080',
-    fontSize: 'clamp(32px,7vw,46px)',
-    fontWeight: 800,
-    letterSpacing: 4,
-  },
-  winnerSub: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 18,
-    marginTop: 8,
-  },
-};
-
-const CardBack = ({ style: extra }) => (
-  <div style={{ ...S.cardBack, ...extra }}>
-    <div style={S.cardBackPattern} />
+const CardBack = ({ extraClass = '' }) => (
+  <div className={`card cardBack ${extraClass}`}>
+    <div className="cardBackPattern" />
   </div>
 );
 
-const CardFace = ({ card, style: extra }) => {
-  if (!card) return <CardBack style={extra} />;
+const CardFace = ({ card, extraClass = '' }) => {
+  if (!card) return <CardBack extraClass={extraClass} />;
 
   const col = card.color === 'red' ? '#cc2200' : '#111';
 
   return (
-    <div style={{ ...S.cardFront, ...extra }}>
-      <div style={S.cardInner}>
-        <div style={S.cardCornerTL}>
-          <span style={{ ...S.cardRank, color: col }}>{card.display}</span>
-          <span style={{ ...S.cardSuit, color: col }}>{card.sym}</span>
+    <div className={`card cardFront ${extraClass}`}>
+      <div className="cardInner">
+        <div className="corner">
+          <span className="rank" style={{ color: col }}>{card.display}</span>
+          <span className="suit" style={{ color: col }}>{card.sym}</span>
         </div>
 
-        <div style={{ ...S.cardCenter, color: col }}>{card.sym}</div>
+        <div className="centerSuit" style={{ color: col }}>{card.sym}</div>
 
-        <div style={S.cardCornerBR}>
-          <span style={{ ...S.cardRank, color: col }}>{card.display}</span>
-          <span style={{ ...S.cardSuit, color: col }}>{card.sym}</span>
+        <div className="corner br">
+          <span className="rank" style={{ color: col }}>{card.display}</span>
+          <span className="suit" style={{ color: col }}>{card.sym}</span>
         </div>
       </div>
     </div>
   );
 };
 
-const PEEK_PX = 'var(--peek-px)';
-
 const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
   const prevCard = history.length > 0 ? history[history.length - 1] : null;
   const totalHeight = prevCard
-    ? `calc(${S.cardFront.height} + ${PEEK_PX})`
-    : S.cardFront.height;
+    ? 'calc(clamp(62px, 19.9vw, 126px) + clamp(18px, 4.6vw, 34px))'
+    : 'clamp(62px, 19.9vw, 126px)';
 
   return (
-    <div style={{ position: 'relative', width: S.cardFront.width, height: totalHeight, flexShrink: 0 }}>
-      {isActive && <div style={S.arrow}>▼</div>}
+    <div className="slotShell" style={{ height: totalHeight }}>
+      {isActive && <div className="arrow">▼</div>}
 
       {prevCard && (
-        <CardFace
-          card={prevCard}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            zIndex: 1,
-            filter: 'brightness(0.7)',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-          }}
-        />
+        <div className="prevCard">
+          <CardFace card={prevCard} />
+        </div>
       )}
 
       <div
         key={animKey}
-        style={{
-          position: 'absolute',
-          top: prevCard ? PEEK_PX : 0,
-          left: 0,
-          zIndex: 2,
-          borderRadius: 'var(--card-radius)',
-          boxShadow: isActive
-            ? '0 0 0 3px #f0d080, 0 8px 28px rgba(0,0,0,0.55)'
-            : '0 4px 14px rgba(0,0,0,0.45)',
-          animation: animKey ? 'flipIn 0.35s ease forwards' : undefined,
-        }}
+        className={`cardTop ${isActive ? 'activeCard' : 'inactiveCard'} ${animKey ? 'flipIn' : ''}`}
+        style={{ top: prevCard ? 'clamp(18px, 4.6vw, 34px)' : 0 }}
       >
         {revealed ? <CardFace card={current} /> : <CardBack />}
       </div>
@@ -1100,32 +1213,28 @@ const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
   );
 };
 
-const BusRunner = ({ activeIdx, crashing, winning, entering }) => {
+const BusRunner = ({ activeIdx, crashing, winning, entering, enterDirection }) => {
   const safeIdx = Math.max(0, Math.min(4, activeIdx));
   const leftPercent = `${10 + safeIdx * 20}%`;
 
-  let vehicleAnimation = undefined;
-
-  if (entering) {
-    vehicleAnimation = 'busEnterVehicle 0.85s cubic-bezier(.18,.9,.2,1.15) forwards';
-  } else if (winning) {
-    vehicleAnimation = 'busDriveOff 1.6s ease-in forwards';
-  }
+  const enteringClass = entering
+    ? enterDirection === 'right'
+      ? 'enteringRight'
+      : 'enteringLeft'
+    : '';
 
   return (
-    <div style={S.busTrack}>
-      <div style={S.busGlow} />
+    <div className="busTrack">
+      <div className="busGlow" />
 
-      <div style={S.busRoad}>
-        <div style={S.busRoadLine} />
+      <div className="busRoad">
+        <div className="busRoadLine" />
       </div>
 
       {crashing && (
         <div
-          style={{
-            ...S.busCrashBlock,
-            left: `calc(${leftPercent} + clamp(20px, 5vw, 32px))`,
-          }}
+          className="crashBlock"
+          style={{ left: `calc(${leftPercent} + clamp(20px, 5vw, 32px))` }}
         >
           🚧
         </div>
@@ -1133,47 +1242,33 @@ const BusRunner = ({ activeIdx, crashing, winning, entering }) => {
 
       {crashing && (
         <div
-          style={{
-            ...S.busCrashBurst,
-            left: `calc(${leftPercent} + clamp(12px, 3vw, 22px))`,
-          }}
+          className="crashBurst"
+          style={{ left: `calc(${leftPercent} + clamp(12px, 3vw, 22px))` }}
         >
           💥
         </div>
       )}
 
-      {winning && <div style={S.raceFlag}>🏁</div>}
+      {winning && <div className="raceFlag">🏁</div>}
 
       {winning && (
         <>
-          <div style={S.busWinBurst}>🏆</div>
-          <div style={S.busWinConfettiLeft}>🎉</div>
-          <div style={S.busWinConfettiRight}>✨</div>
+          <div className="winBurst">🏆</div>
+          <div className="confettiLeft">🎉</div>
+          <div className="confettiRight">✨</div>
         </>
       )}
 
       <div
-        style={{
-          ...S.busVehicle,
-          left: leftPercent,
-          animation: vehicleAnimation,
-        }}
+        className={`busVehicle ${enteringClass} ${winning ? 'winning' : ''}`}
+        style={{ left: leftPercent }}
       >
-        <div style={S.busTrail}>
-          <span style={S.smokePuff}>💨</span>
-          <span style={S.sparkle}>✨</span>
+        <div className="busTrail">
+          <span className="smokePuff">💨</span>
+          <span className="sparkle">✨</span>
         </div>
 
-        <div
-          style={{
-            ...S.busEmoji,
-            animation: winning
-              ? 'busWinBob 0.28s ease-in-out infinite'
-              : crashing
-                ? 'busCrash 0.75s ease-in-out forwards'
-                : 'busBob 0.42s ease-in-out infinite',
-          }}
-        >
+        <div className={`busEmoji ${crashing ? 'crashing' : ''} ${winning ? 'winning' : ''}`}>
           🚌
         </div>
       </div>
@@ -1182,6 +1277,8 @@ const BusRunner = ({ activeIdx, crashing, winning, entering }) => {
 };
 
 const CardGame = () => {
+  const savedName = cleanPlayerName(loadPlayerName());
+
   const [ruleset, setRuleset] = useState(RULESETS.WELLY);
   const [positions, setPositions] = useState([null, null, null, null, null]);
   const [history, setHistory] = useState([[], [], [], [], []]);
@@ -1195,9 +1292,20 @@ const CardGame = () => {
   const [shakeSlot, setShakeSlot] = useState(null);
   const [animKey, setAnimKey] = useState(0);
   const [showRules, setShowRules] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardError, setLeaderboardError] = useState('');
+  const [playerNameDraft, setPlayerNameDraft] = useState(savedName);
+  const [activePlayerName, setActivePlayerName] = useState(savedName);
+  const [loginMessage, setLoginMessage] = useState(savedName ? `Logged in as ${savedName}` : '');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [takenName, setTakenName] = useState(null);
   const [busCrash, setBusCrash] = useState(false);
   const [busWin, setBusWin] = useState(false);
   const [busEntering, setBusEntering] = useState(false);
+  const [busEnterDirection, setBusEnterDirection] = useState('left');
   const [failPending, setFailPending] = useState(false);
   const [lifetimeSips, setLifetimeSips] = useState(() => loadLifetimeSips());
 
@@ -1205,6 +1313,109 @@ const CardGame = () => {
   const busCrashTimer = useRef(null);
   const busEnterTimer = useRef(null);
   const winTimer = useRef(null);
+
+  const loadLeaderboard = useCallback(async () => {
+    setLeaderboardLoading(true);
+    setLeaderboardError('');
+
+    try {
+      const data = await fetchLeaderboard();
+      setLeaderboard(data);
+    } catch (err) {
+      setLeaderboardError(err?.message || 'Could not load leaderboard.');
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  }, []);
+
+  const openLeaderboard = () => {
+    setShowLeaderboard(true);
+    loadLeaderboard();
+  };
+
+  const openLogin = () => {
+    setTakenName(null);
+    setLoginMessage(activePlayerName ? `Logged in as ${activePlayerName}` : '');
+    setShowLogin(true);
+  };
+
+  const completeLogin = async (name) => {
+    const cleanName = cleanPlayerName(name);
+
+    await ensureOnlinePlayer(cleanName);
+
+    savePlayerName(cleanName);
+    setActivePlayerName(cleanName);
+    setPlayerNameDraft(cleanName);
+    setLoginMessage(`Logged in as ${cleanName}`);
+    setTakenName(null);
+    setShowLogin(false);
+
+    if (showLeaderboard) {
+      loadLeaderboard();
+    }
+  };
+
+  const handleLogin = async () => {
+    const cleanName = cleanPlayerName(playerNameDraft);
+
+    if (!cleanName) {
+      setLoginMessage('Enter a name first.');
+      return;
+    }
+
+    setLoginLoading(true);
+    setLoginMessage('');
+
+    try {
+      const existing = await findLeaderboardPlayer(cleanName);
+      const cookieName = cleanPlayerName(loadPlayerName());
+      const sameAsCookie = nameKey(cookieName) === nameKey(cleanName);
+      const sameAsActive = nameKey(activePlayerName) === nameKey(cleanName);
+
+      if (existing && !sameAsCookie && !sameAsActive) {
+        setTakenName({
+          name: cleanName,
+          sips: existing.sips,
+        });
+        setLoginMessage('');
+        return;
+      }
+
+      await completeLogin(cleanName);
+    } catch (err) {
+      setLoginMessage(err?.message || 'Could not log in.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const confirmTakenNameLogin = async () => {
+    if (!takenName?.name) return;
+
+    setLoginLoading(true);
+
+    try {
+      await completeLogin(takenName.name);
+    } catch (err) {
+      setLoginMessage(err?.message || 'Could not log in.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handlePlayerNameChange = (e) => {
+    setPlayerNameDraft(e.target.value.slice(0, 20));
+    setTakenName(null);
+  };
+
+  const handleLogout = () => {
+    clearPlayerName();
+    setActivePlayerName('');
+    setPlayerNameDraft('');
+    setTakenName(null);
+    setLoginMessage('Logged out.');
+  };
 
   const drawCard = useCallback((pool, ptr, excludedKeys = new Set()) => {
     const activePool = pool.length > 0 ? pool : FULL_DECK;
@@ -1228,7 +1439,7 @@ const CardGame = () => {
     };
   }, []);
 
-  const resetBoardForRuleset = useCallback((nextRuleset) => {
+  const resetBoardForRuleset = useCallback((nextRuleset, enterFrom = 'left') => {
     clearTimeout(penaltyTimer.current);
     clearTimeout(busCrashTimer.current);
     clearTimeout(busEnterTimer.current);
@@ -1236,12 +1447,18 @@ const CardGame = () => {
 
     setBusCrash(false);
     setBusWin(false);
-    setBusEntering(true);
     setFailPending(false);
+    setBusEnterDirection(enterFrom);
 
-    busEnterTimer.current = setTimeout(() => {
+    if (enterFrom === 'none') {
       setBusEntering(false);
-    }, BUS_ENTER_MS);
+    } else {
+      setBusEntering(true);
+
+      busEnterTimer.current = setTimeout(() => {
+        setBusEntering(false);
+      }, BUS_ENTER_MS);
+    }
 
     const pool = shuffle(FULL_DECK);
 
@@ -1263,18 +1480,35 @@ const CardGame = () => {
   }, []);
 
   const startGame = useCallback(() => {
-    resetBoardForRuleset(ruleset);
+    resetBoardForRuleset(ruleset, 'left');
   }, [resetBoardForRuleset, ruleset]);
 
   useEffect(() => {
-    resetBoardForRuleset(RULESETS.WELLY);
+    resetBoardForRuleset(RULESETS.WELLY, 'left');
   }, [resetBoardForRuleset]);
 
   const switchRuleset = (nextRuleset) => {
     if (ruleset === nextRuleset) return;
 
     setRuleset(nextRuleset);
-    resetBoardForRuleset(nextRuleset);
+    resetBoardForRuleset(nextRuleset, 'left');
+  };
+
+  const resetPlayerSipCount = async () => {
+    setLifetimeSips(0);
+    saveLifetimeSips(0);
+
+    if (!activePlayerName) return;
+
+    try {
+      await resetOnlineSips(activePlayerName);
+
+      if (showLeaderboard) {
+        loadLeaderboard();
+      }
+    } catch (err) {
+      setLeaderboardError(err?.message || 'Could not reset leaderboard.');
+    }
   };
 
   const addPenaltyToTally = (idx) => {
@@ -1287,6 +1521,21 @@ const CardGame = () => {
       saveLifetimeSips(newTotal);
       return newTotal;
     });
+
+    if (!activePlayerName) {
+      setLoginMessage('Log in with a name to save online.');
+      return;
+    }
+
+    addOnlineSips(activePlayerName, penaltyObj.sips)
+      .then(() => {
+        if (showLeaderboard) {
+          loadLeaderboard();
+        }
+      })
+      .catch((err) => {
+        setLeaderboardError(err?.message || 'Could not sync leaderboard.');
+      });
   };
 
   const triggerWin = () => {
@@ -1438,7 +1687,7 @@ const CardGame = () => {
     }
 
     failCurrentCard(() => {
-      resetBoardForRuleset(RULESETS.AUCKLAND);
+      resetBoardForRuleset(RULESETS.AUCKLAND, 'none');
     });
   };
 
@@ -1465,7 +1714,7 @@ const CardGame = () => {
       }
 
       return (
-        <span style={S.bannerLine}>
+        <span className="bannerLine">
           Higher, lower, or even than the{' '}
           <strong style={{ color: '#f0d080' }}>
             {rankLabel(currentCard)} of {currentCard.name}
@@ -1476,11 +1725,11 @@ const CardGame = () => {
     }
 
     if (activeIdx === 0) {
-      return <span style={S.bannerLine}>Pick the colour of the first card.</span>;
+      return <span className="bannerLine">Pick the colour of the first card.</span>;
     }
 
     if (activeIdx === 1) {
-      return <span style={S.bannerLine}>Will the next card be even or odd?</span>;
+      return <span className="bannerLine">Will the next card be even or odd?</span>;
     }
 
     if (activeIdx === 2) {
@@ -1488,7 +1737,7 @@ const CardGame = () => {
       const second = positions[1];
 
       return (
-        <span style={S.bannerLine}>
+        <span className="bannerLine">
           Inside, outside, or even{' '}
           <strong style={{ color: '#f0d080' }}>
             {rankLabel(first)} and {rankLabel(second)}
@@ -1502,7 +1751,7 @@ const CardGame = () => {
       const previous = positions[2];
 
       return (
-        <span style={S.bannerLine}>
+        <span className="bannerLine">
           Higher, lower, or even than the{' '}
           <strong style={{ color: '#f0d080' }}>
             {rankLabel(previous)} of {previous.name}
@@ -1512,7 +1761,7 @@ const CardGame = () => {
       );
     }
 
-    return <span style={S.bannerLine}>Guess the suit of the final card.</span>;
+    return <span className="bannerLine">Guess the suit of the final card.</span>;
   };
 
   const getRulesContent = () => {
@@ -1550,47 +1799,47 @@ const CardGame = () => {
   const getControls = () => {
     if (ruleset === RULESETS.WELLY) {
       return [
-        { type: 'higher', label: '↑ Higher', style: S.btnHigher },
-        { type: 'lower', label: '↓ Lower', style: S.btnLower },
-        { type: 'even', label: '= Even', style: S.btnEven },
+        { type: 'higher', label: '↑ Higher', className: 'btnHigher' },
+        { type: 'lower', label: '↓ Lower', className: 'btnLower' },
+        { type: 'even', label: '= Even', className: 'btnEven' },
       ];
     }
 
     if (activeIdx === 0) {
       return [
-        { type: 'red', label: '♥ Red', style: S.btnRed },
-        { type: 'black', label: '♠ Black', style: S.btnBlack },
+        { type: 'red', label: '♥ Red', className: 'btnRed' },
+        { type: 'black', label: '♠ Black', className: 'btnBlack' },
       ];
     }
 
     if (activeIdx === 1) {
       return [
-        { type: 'even', label: '= Even', style: S.btnEven },
-        { type: 'odd', label: 'Odd', style: S.btnOdd },
+        { type: 'even', label: '= Even', className: 'btnEven' },
+        { type: 'odd', label: 'Odd', className: 'btnOdd' },
       ];
     }
 
     if (activeIdx === 2) {
       return [
-        { type: 'inside', label: 'Inside', style: S.btnHigher },
-        { type: 'outside', label: 'Outside', style: S.btnLower },
-        { type: 'even', label: '= Even', style: S.btnEven },
+        { type: 'inside', label: 'Inside', className: 'btnHigher' },
+        { type: 'outside', label: 'Outside', className: 'btnLower' },
+        { type: 'even', label: '= Even', className: 'btnEven' },
       ];
     }
 
     if (activeIdx === 3) {
       return [
-        { type: 'higher', label: '↑ Higher', style: S.btnHigher },
-        { type: 'lower', label: '↓ Lower', style: S.btnLower },
-        { type: 'even', label: '= Even', style: S.btnEven },
+        { type: 'higher', label: '↑ Higher', className: 'btnHigher' },
+        { type: 'lower', label: '↓ Lower', className: 'btnLower' },
+        { type: 'even', label: '= Even', className: 'btnEven' },
       ];
     }
 
     return [
-      { type: 'spades', label: '♠ Spades', style: S.btnBlack },
-      { type: 'clubs', label: '♣ Clubs', style: S.btnBlack },
-      { type: 'hearts', label: '♥ Hearts', style: S.btnRed },
-      { type: 'diamonds', label: '♦ Diamonds', style: S.btnRed },
+      { type: 'spades', label: '♠ Spades', className: 'btnBlack' },
+      { type: 'clubs', label: '♣ Clubs', className: 'btnBlack' },
+      { type: 'hearts', label: '♥ Hearts', className: 'btnRed' },
+      { type: 'diamonds', label: '♦ Diamonds', className: 'btnRed' },
     ];
   };
 
@@ -1599,22 +1848,29 @@ const CardGame = () => {
   const rulesContent = getRulesContent();
 
   return (
-    <div style={S.wrap}>
-      <style>{CSS_KEYFRAMES}</style>
+    <div className="game">
+      <style>{CSS}</style>
 
-      <button style={S.cornerRulesBtn} onClick={() => setShowRules(true)}>
+      <div className="topLeftButtons">
+        <button className="cornerBtn" onClick={openLeaderboard}>
+          🏆 Leaderboard
+        </button>
+
+        <button className="cornerBtn" onClick={openLogin}>
+          👤 {activePlayerName || 'Login'}
+        </button>
+      </div>
+
+      <button className="cornerBtn rulesBtn" onClick={() => setShowRules(true)}>
         ? Rules
       </button>
 
-      <h1 style={S.title}>🚌 The Bus</h1>
+      <h1 className="title">🚌 The Bus</h1>
 
-      <div style={S.topMetaRow}>
-        <div style={S.rulesToggle}>
+      <div className="topMetaRow">
+        <div className="rulesToggle">
           <button
-            style={{
-              ...S.rulesToggleBtn,
-              ...(ruleset === RULESETS.WELLY ? S.rulesToggleBtnActive : {}),
-            }}
+            className={`rulesToggleBtn ${ruleset === RULESETS.WELLY ? 'active' : ''}`}
             onClick={() => switchRuleset(RULESETS.WELLY)}
             disabled={ruleset === RULESETS.WELLY}
           >
@@ -1622,10 +1878,7 @@ const CardGame = () => {
           </button>
 
           <button
-            style={{
-              ...S.rulesToggleBtn,
-              ...(ruleset === RULESETS.AUCKLAND ? S.rulesToggleBtnActive : {}),
-            }}
+            className={`rulesToggleBtn ${ruleset === RULESETS.AUCKLAND ? 'active' : ''}`}
             onClick={() => switchRuleset(RULESETS.AUCKLAND)}
             disabled={ruleset === RULESETS.AUCKLAND}
           >
@@ -1633,48 +1886,43 @@ const CardGame = () => {
           </button>
         </div>
 
-        <div style={S.statsBar}>
-          <div style={S.statBlock}>
-            <span style={S.statNum}>{lifetimeSips}</span>
-            <span style={S.statLabel}>lifetime sips</span>
+        <div className="statsBar">
+          <div className="statBlock">
+            <span className="statNum">{lifetimeSips}</span>
+            <span className="statLabel">sips</span>
           </div>
 
-          <div style={S.statDivider} />
+          <div className="statDivider" />
 
-          <div style={S.statBlock}>
-            <span style={S.statNum}>{(lifetimeSips / SIPS_PER_DRINK).toFixed(1)}</span>
-            <span style={S.statLabel}>drinks consumed</span>
+          <div className="statBlock">
+            <span className="statNum">{(lifetimeSips / SIPS_PER_DRINK).toFixed(1)}</span>
+            <span className="statLabel">drinks consumed</span>
           </div>
 
-          <button
-            style={S.resetStatsBtn}
-            onClick={() => {
-              setLifetimeSips(0);
-              saveLifetimeSips(0);
-            }}
-          >
+          <button className="resetStatsBtn" onClick={resetPlayerSipCount}>
             ↺ reset
           </button>
         </div>
       </div>
 
-      <div style={S.banner}>
+      <div className="banner">
         {getBannerText()}
       </div>
 
-      <div style={S.cardStage}>
+      <div className="cardStage">
         <BusRunner
           activeIdx={activeIdx}
           crashing={busCrash}
           winning={busWin}
           entering={busEntering}
+          enterDirection={busEnterDirection}
         />
 
-        <div style={S.cardRow}>
+        <div className="cardRow">
           {positions.map((card, i) => (
             <div
               key={i}
-              style={{ animation: shakeSlot === i ? 'shake 0.4s ease' : undefined }}
+              className={shakeSlot === i ? 'shake' : ''}
             >
               <CardSlot
                 current={card}
@@ -1688,11 +1936,11 @@ const CardGame = () => {
         </div>
       </div>
 
-      <div style={S.controls}>
+      <div className="controls">
         {controls.map(control => (
           <button
             key={control.type}
-            style={{ ...S.btn, ...control.style }}
+            className={`btn ${control.className}`}
             onClick={() => handleGuess(control.type)}
             disabled={disabled}
           >
@@ -1700,55 +1948,176 @@ const CardGame = () => {
           </button>
         ))}
 
-        <button style={{ ...S.btn, ...S.btnRestart }} onClick={startGame}>
+        <button className="btn btnRestart" onClick={startGame}>
           ↺ Restart
         </button>
       </div>
 
-      {showRules && (
-        <div style={S.rulesOverlay} onClick={() => setShowRules(false)}>
-          <div style={S.rulesBox} onClick={(e) => e.stopPropagation()}>
-            <div style={S.rulesTitle}>{rulesContent.title}</div>
+      {showLogin && (
+        <div className="overlay" onClick={() => setShowLogin(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Login</div>
 
-            <div style={S.rulesList}>
+            {!takenName && (
+              <>
+                <div className="modalSub">
+                  Enter a username to save your score online.
+                </div>
+
+                <div className="loginModalRow">
+                  <input
+                    className="loginInput"
+                    value={playerNameDraft}
+                    onChange={handlePlayerNameChange}
+                    placeholder="Enter username"
+                    maxLength={20}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleLogin();
+                      }
+                    }}
+                  />
+
+                  <button className="smallBtn" onClick={handleLogin} disabled={loginLoading}>
+                    {loginLoading ? 'Checking...' : 'Login'}
+                  </button>
+                </div>
+
+                <div className="status">
+                  {loginMessage || (activePlayerName ? `Currently logged in as ${activePlayerName}` : 'Not logged in')}
+                </div>
+
+                <div className="modalActions">
+                  {activePlayerName && (
+                    <button className="btn btnLower" onClick={handleLogout}>
+                      Log out
+                    </button>
+                  )}
+
+                  <button className="btn btnRestart" onClick={() => setShowLogin(false)}>
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
+
+            {takenName && (
+              <>
+                <div className="modalSub">
+                  <strong style={{ color: '#f0d080' }}>{takenName.name}</strong> is already on the leaderboard
+                  with <strong style={{ color: '#f0d080' }}>{drinksLabelFromSips(takenName.sips)}</strong>.
+                  <br />
+                  Is this you?
+                </div>
+
+                <div className="modalActions">
+                  <button className="btn btnHigher" onClick={confirmTakenNameLogin} disabled={loginLoading}>
+                    Yes, log me in
+                  </button>
+
+                  <button
+                    className="btn btnLower"
+                    onClick={() => {
+                      setTakenName(null);
+                      setLoginMessage('Choose another username.');
+                    }}
+                  >
+                    No, choose another
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showRules && (
+        <div className="overlay" onClick={() => setShowRules(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">{rulesContent.title}</div>
+
+            <div className="rulesList">
               {rulesContent.lines.map((line, i) => (
-                <div key={i} style={S.rulesLine}>
-                  <span style={S.rulesBullet}>•</span>
+                <div key={i} className="rulesLine">
+                  <span className="rulesBullet">•</span>
                   <span>{line}</span>
                 </div>
               ))}
             </div>
 
-            <button
-              style={{ ...S.btn, ...S.btnRestart, ...S.rulesCloseBtn }}
-              onClick={() => setShowRules(false)}
-            >
-              Close
-            </button>
+            <div className="modalActions">
+              <button className="btn btnRestart" onClick={() => setShowRules(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLeaderboard && (
+        <div className="overlay" onClick={() => setShowLeaderboard(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modalTitle">Drink Leaderboard</div>
+
+            <div className="modalSub">
+              Logged in as <strong style={{ color: '#f0d080' }}>{activePlayerName || 'nobody'}</strong>.
+              Wrong guesses add to your drink total.
+            </div>
+
+            {leaderboardLoading && (
+              <div className="status">Loading leaderboard...</div>
+            )}
+
+            {!leaderboardLoading && leaderboardError && (
+              <div className="status">{leaderboardError}</div>
+            )}
+
+            {!leaderboardLoading && !leaderboardError && leaderboard.length === 0 && (
+              <div className="status">No scores yet.</div>
+            )}
+
+            {!leaderboardLoading && !leaderboardError && leaderboard.length > 0 && (
+              <div className="leaderboardList">
+                {leaderboard.map((row, i) => (
+                  <div key={`${row.name}-${i}`} className="leaderboardRow">
+                    <span className="leaderboardRank">#{i + 1}</span>
+                    <span className="leaderboardName">{row.name}</span>
+                    <span className="leaderboardSips">{drinksLabelFromSips(row.sips)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="modalActions">
+              <button className="btn btnEven" onClick={loadLeaderboard} disabled={leaderboardLoading}>
+                Refresh
+              </button>
+
+              <button className="btn btnRestart" onClick={() => setShowLeaderboard(false)}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {penalty && (
-        <div style={S.penaltyToast}>
-          <div style={S.penaltyMsg}>{penalty}</div>
-          <div style={S.penaltySub}>
+        <div className="penaltyToast">
+          <div className="penaltyMsg">{penalty}</div>
+          <div className="penaltySub">
             {ruleset === RULESETS.AUCKLAND ? 'Board reset!' : 'Back to card 1!'}
           </div>
         </div>
       )}
 
       {winner && (
-        <div style={S.winnerOverlay}>
-          <div style={S.winnerBox}>
+        <div className="winnerOverlay">
+          <div className="winnerBox">
             <div style={{ fontSize: 62, marginBottom: 8 }}>🏆</div>
-            <div style={S.winnerText}>WINNER!</div>
-            <div style={S.winnerSub}>You rode the bus!</div>
+            <div className="winnerText">WINNER!</div>
+            <div className="winnerSub">You rode the bus!</div>
 
-            <button
-              style={{ ...S.btn, ...S.btnRestart, marginTop: 18 }}
-              onClick={startGame}
-            >
+            <button className="btn btnRestart" style={{ marginTop: 18 }} onClick={startGame}>
               Play Again
             </button>
           </div>
