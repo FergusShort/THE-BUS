@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.js": "/THE-BUS/static/js/main.84f21931.js",
+    "main.js": "/THE-BUS/static/js/main.c648d93b.js",
     "index.html": "/THE-BUS/index.html",
-    "main.84f21931.js.map": "/THE-BUS/static/js/main.84f21931.js.map"
+    "main.c648d93b.js.map": "/THE-BUS/static/js/main.c648d93b.js.map"
   },
   "entrypoints": [
-    "static/js/main.84f21931.js"
+    "static/js/main.c648d93b.js"
   ]
 }
