@@ -69,6 +69,11 @@ function rankLabel(card) {
   return RANK_NAMES[card.val] || card.display;
 }
 
+function cardKey(card) {
+  if (!card) return '';
+  return `${card.name}-${card.val}`;
+}
+
 function isOdd(card) {
   return card.val % 2 === 1;
 }
@@ -86,6 +91,26 @@ function getInsideOutsideResult(card, a, b) {
   }
 
   return 'outside';
+}
+
+function getVisibleCardKeys(positions, history) {
+  const keys = new Set();
+
+  positions.forEach(card => {
+    if (card) keys.add(cardKey(card));
+  });
+
+  history.forEach(slotHistory => {
+    const visiblePreviousCard = slotHistory.length > 0
+      ? slotHistory[slotHistory.length - 1]
+      : null;
+
+    if (visiblePreviousCard) {
+      keys.add(cardKey(visiblePreviousCard));
+    }
+  });
+
+  return keys;
 }
 
 /* ─────────────────────────────────────────────
@@ -124,7 +149,7 @@ const CardFace = ({ card, style: extra }) => {
 /* ─────────────────────────────────────────────
    CardSlot
    ───────────────────────────────────────────── */
-const PEEK_PX = 'clamp(18px, 4.6vw, 34px)';
+const PEEK_PX = 'var(--peek-px)';
 
 const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
   const prevCard = history.length > 0 ? history[history.length - 1] : null;
@@ -133,7 +158,7 @@ const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
     : S.cardFront.height;
 
   return (
-    <div style={{ position: 'relative', width: S.cardFront.width, height: totalHeight }}>
+    <div style={{ position: 'relative', width: S.cardFront.width, height: totalHeight, flexShrink: 0 }}>
       {isActive && <div style={S.arrow}>▼</div>}
 
       {prevCard && (
@@ -157,7 +182,7 @@ const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
           top: prevCard ? PEEK_PX : 0,
           left: 0,
           zIndex: 2,
-          borderRadius: 9,
+          borderRadius: 'var(--card-radius)',
           boxShadow: isActive
             ? '0 0 0 3px #f0d080, 0 8px 28px rgba(0,0,0,0.55)'
             : '0 4px 14px rgba(0,0,0,0.45)',
@@ -191,13 +216,26 @@ const CardGame = () => {
 
   const penaltyTimer = useRef(null);
 
-  const drawCard = useCallback((pool, ptr) => {
-    if (ptr >= pool.length) {
-      const np = shuffle(FULL_DECK);
-      return { card: np[0], newPool: np, newPtr: 1 };
+  const drawCard = useCallback((pool, ptr, excludedKeys = new Set()) => {
+    const activePool = pool.length > 0 ? pool : FULL_DECK;
+    let nextPtr = ptr % activePool.length;
+
+    for (let i = 0; i < activePool.length; i++) {
+      const card = activePool[nextPtr];
+      nextPtr = (nextPtr + 1) % activePool.length;
+
+      if (!excludedKeys.has(cardKey(card))) {
+        return { card, newPool: activePool, newPtr: nextPtr };
+      }
     }
 
-    return { card: pool[ptr], newPool: pool, newPtr: ptr + 1 };
+    const fallbackCard = activePool[nextPtr];
+
+    return {
+      card: fallbackCard,
+      newPool: activePool,
+      newPtr: (nextPtr + 1) % activePool.length,
+    };
   }, []);
 
   const resetBoardForRuleset = useCallback((nextRuleset) => {
@@ -258,7 +296,8 @@ const CardGame = () => {
 
   const handleWellyGuess = (type) => {
     const current = positions[activeIdx];
-    const { card: next, newPool, newPtr } = drawCard(deckPool, deckPtr);
+    const excludedKeys = getVisibleCardKeys(positions, history);
+    const { card: next, newPool, newPtr } = drawCard(deckPool, deckPtr, excludedKeys);
 
     setDeckPool(newPool);
     setDeckPtr(newPtr);
@@ -490,51 +529,53 @@ const CardGame = () => {
 
       <h1 style={S.title}>🚌 The Bus</h1>
 
-      {/* Rules toggle */}
-      <div style={S.rulesToggle}>
-        <button
-          style={{
-            ...S.rulesToggleBtn,
-            ...(ruleset === RULESETS.WELLY ? S.rulesToggleBtnActive : {}),
-          }}
-          onClick={() => switchRuleset(RULESETS.WELLY)}
-          disabled={ruleset === RULESETS.WELLY}
-        >
-          Welly Rules
-        </button>
+      <div style={S.topMetaRow}>
+        {/* Rules toggle */}
+        <div style={S.rulesToggle}>
+          <button
+            style={{
+              ...S.rulesToggleBtn,
+              ...(ruleset === RULESETS.WELLY ? S.rulesToggleBtnActive : {}),
+            }}
+            onClick={() => switchRuleset(RULESETS.WELLY)}
+            disabled={ruleset === RULESETS.WELLY}
+          >
+            Welly Rules
+          </button>
 
-        <button
-          style={{
-            ...S.rulesToggleBtn,
-            ...(ruleset === RULESETS.AUCKLAND ? S.rulesToggleBtnActive : {}),
-          }}
-          onClick={() => switchRuleset(RULESETS.AUCKLAND)}
-          disabled={ruleset === RULESETS.AUCKLAND}
-        >
-          Auckland Rules
-        </button>
-      </div>
-
-      {/* Stats bar */}
-      <div style={S.statsBar}>
-        <div style={S.statBlock}>
-          <span style={S.statNum}>{lifetimeSips}</span>
-          <span style={S.statLabel}>lifetime sips</span>
+          <button
+            style={{
+              ...S.rulesToggleBtn,
+              ...(ruleset === RULESETS.AUCKLAND ? S.rulesToggleBtnActive : {}),
+            }}
+            onClick={() => switchRuleset(RULESETS.AUCKLAND)}
+            disabled={ruleset === RULESETS.AUCKLAND}
+          >
+            Auckland Rules
+          </button>
         </div>
 
-        <div style={S.statDivider} />
+        {/* Stats bar */}
+        <div style={S.statsBar}>
+          <div style={S.statBlock}>
+            <span style={S.statNum}>{lifetimeSips}</span>
+            <span style={S.statLabel}>lifetime sips</span>
+          </div>
 
-        <div style={S.statBlock}>
-          <span style={S.statNum}>{(lifetimeSips / SIPS_PER_DRINK).toFixed(1)}</span>
-          <span style={S.statLabel}>drinks consumed</span>
+          <div style={S.statDivider} />
+
+          <div style={S.statBlock}>
+            <span style={S.statNum}>{(lifetimeSips / SIPS_PER_DRINK).toFixed(1)}</span>
+            <span style={S.statLabel}>drinks consumed</span>
+          </div>
+
+          <button
+            style={S.resetStatsBtn}
+            onClick={() => { setLifetimeSips(0); saveLifetimeSips(0); }}
+          >
+            ↺ reset
+          </button>
         </div>
-
-        <button
-          style={S.resetStatsBtn}
-          onClick={() => { setLifetimeSips(0); saveLifetimeSips(0); }}
-        >
-          ↺ reset
-        </button>
       </div>
 
       {/* Banner */}
@@ -615,6 +656,143 @@ const CardGame = () => {
 const CSS_KEYFRAMES = `
   *, *::before, *::after { box-sizing: border-box; }
 
+  :root {
+    --app-padding: clamp(10px, 2.5vw, 22px);
+    --layout-gap: clamp(10px, 2.2vh, 18px);
+
+    --title-size: clamp(28px, 8vw, 42px);
+    --title-letter-spacing: clamp(3px, 1.2vw, 5px);
+
+    --top-row-gap: clamp(5px, 1.2vw, 16px);
+
+    --rules-gap: clamp(3px, 0.8vw, 8px);
+    --rules-pad: clamp(3px, 0.8vw, 6px);
+    --rules-btn-pad-y: clamp(6px, 1.2vw, 11px);
+    --rules-btn-pad-x: clamp(5px, 1.8vw, 20px);
+    --rules-font: clamp(8px, 2.4vw, 22px);
+
+    --stats-gap: clamp(5px, 1.6vw, 16px);
+    --stats-pad-y: clamp(6px, 1.4vw, 13px);
+    --stats-pad-x: clamp(6px, 1.8vw, 24px);
+    --stat-num-size: clamp(15px, 4.4vw, 36px);
+    --stat-label-size: clamp(7px, 1.8vw, 15px);
+    --stat-divider-height: clamp(24px, 6vw, 42px);
+    --reset-font: clamp(9px, 1.8vw, 14px);
+    --reset-pad-y: clamp(3px, 1vw, 7px);
+    --reset-pad-x: clamp(5px, 1.3vw, 10px);
+
+    --banner-font: clamp(11px, 3.35vw, 22px);
+    --banner-min-height: clamp(48px, 12vw, 64px);
+    --banner-pad-y: clamp(10px, 2.6vw, 14px);
+    --banner-pad-x: clamp(10px, 3vw, 26px);
+
+    --card-w: clamp(48px, 15vw, 90px);
+    --card-h: clamp(68px, 21vw, 126px);
+    --card-gap: clamp(4px, 1.55vw, 20px);
+    --card-radius: clamp(7px, 2vw, 9px);
+    --card-row-pad-top: clamp(34px, 9vw, 66px);
+    --card-row-side-pad: clamp(8px, 2vw, 14px);
+    --card-inner-pad: clamp(4px, 1.4vw, 7px);
+    --card-rank-size: clamp(11px, 3.3vw, 17px);
+    --card-suit-size: clamp(9px, 2.9vw, 15px);
+    --card-center-size: clamp(20px, 6.6vw, 34px);
+    --peek-px: clamp(18px, 4.6vw, 34px);
+    --arrow-top: calc(clamp(24px, 7vw, 38px) * -1);
+    --arrow-size: clamp(20px, 6vw, 28px);
+
+    --btn-gap: clamp(8px, 2vw, 12px);
+    --btn-pad-y: clamp(11px, 3vw, 17px);
+    --btn-pad-x: clamp(16px, 4vw, 28px);
+    --btn-font: clamp(16px, 4.5vw, 21px);
+  }
+
+  @media (orientation: landscape) and (max-height: 560px) {
+    :root {
+      --app-padding: 7px;
+      --layout-gap: 6px;
+
+      --title-size: clamp(22px, 7vh, 34px);
+      --title-letter-spacing: clamp(2px, 0.8vw, 4px);
+
+      --top-row-gap: 8px;
+
+      --rules-gap: 4px;
+      --rules-pad: 4px;
+      --rules-btn-pad-y: 6px;
+      --rules-btn-pad-x: clamp(8px, 1.5vw, 14px);
+      --rules-font: clamp(11px, 3.4vh, 16px);
+
+      --stats-gap: clamp(6px, 1.2vw, 12px);
+      --stats-pad-y: 6px;
+      --stats-pad-x: clamp(8px, 1.5vw, 14px);
+      --stat-num-size: clamp(17px, 5.8vh, 26px);
+      --stat-label-size: clamp(8px, 2.4vh, 11px);
+      --stat-divider-height: clamp(24px, 7vh, 34px);
+      --reset-font: clamp(9px, 2.5vh, 12px);
+      --reset-pad-y: 4px;
+      --reset-pad-x: 7px;
+
+      --banner-font: clamp(13px, 4vh, 18px);
+      --banner-min-height: 36px;
+      --banner-pad-y: 7px;
+      --banner-pad-x: 12px;
+
+      --card-w: clamp(42px, 8.3vw, 72px);
+      --card-h: clamp(59px, 11.6vw, 101px);
+      --card-gap: clamp(6px, 1.3vw, 14px);
+      --card-radius: 7px;
+      --card-row-pad-top: 28px;
+      --card-row-side-pad: 8px;
+      --card-inner-pad: 4px;
+      --card-rank-size: clamp(10px, 3vh, 14px);
+      --card-suit-size: clamp(8px, 2.6vh, 12px);
+      --card-center-size: clamp(18px, 5vh, 28px);
+      --peek-px: 22px;
+      --arrow-top: -26px;
+      --arrow-size: 20px;
+
+      --btn-gap: 7px;
+      --btn-pad-y: 8px;
+      --btn-pad-x: clamp(12px, 2vw, 20px);
+      --btn-font: clamp(13px, 4vh, 18px);
+    }
+  }
+
+  @media (orientation: landscape) and (max-height: 410px) {
+    :root {
+      --app-padding: 5px;
+      --layout-gap: 4px;
+
+      --title-size: clamp(20px, 7vh, 28px);
+
+      --rules-btn-pad-y: 5px;
+      --rules-btn-pad-x: 8px;
+      --rules-font: clamp(10px, 3.3vh, 14px);
+
+      --stats-pad-y: 5px;
+      --stats-pad-x: 8px;
+      --stat-num-size: clamp(15px, 5.4vh, 22px);
+      --stat-label-size: clamp(7px, 2.2vh, 10px);
+      --stat-divider-height: 25px;
+
+      --banner-font: clamp(12px, 3.8vh, 16px);
+      --banner-min-height: 32px;
+      --banner-pad-y: 6px;
+
+      --card-w: clamp(38px, 7.5vw, 62px);
+      --card-h: clamp(54px, 10.5vw, 87px);
+      --card-gap: clamp(5px, 1.1vw, 11px);
+      --card-row-pad-top: 24px;
+      --peek-px: 18px;
+      --arrow-top: -23px;
+      --arrow-size: 18px;
+
+      --btn-pad-y: 7px;
+      --btn-pad-x: 12px;
+      --btn-font: clamp(12px, 3.8vh, 16px);
+    }
+  }
+
   html, body {
     margin: 0;
     padding: 0;
@@ -694,39 +872,54 @@ const S = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 'clamp(10px, 2.2vh, 18px)',
-    padding: 'clamp(10px, 2.5vw, 22px)',
+    gap: 'var(--layout-gap)',
+    padding: 'var(--app-padding)',
     fontFamily: "'Segoe UI', system-ui, sans-serif",
     background: 'transparent',
-    overflow: 'hidden',
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    WebkitOverflowScrolling: 'touch',
     minWidth: 0,
   },
   title: {
     color: '#f0d080',
-    fontSize: 'clamp(28px, 8vw, 42px)',
+    fontSize: 'var(--title-size)',
     fontWeight: 800,
-    letterSpacing: 'clamp(3px, 1.2vw, 5px)',
+    letterSpacing: 'var(--title-letter-spacing)',
     textTransform: 'uppercase',
     textShadow: '0 2px 12px rgba(0,0,0,0.6)',
     margin: 0,
     lineHeight: 1,
+    flexShrink: 0,
+  },
+  topMetaRow: {
+    display: 'flex',
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    gap: 'var(--top-row-gap)',
+    flexWrap: 'nowrap',
+    width: '100%',
+    maxWidth: 1180,
+    minWidth: 0,
+    flexShrink: 0,
   },
   rulesToggle: {
     display: 'flex',
-    gap: 'clamp(5px, 1.5vw, 8px)',
+    gap: 'var(--rules-gap)',
     background: 'rgba(0,0,0,0.35)',
     border: '1px solid rgba(240,208,128,0.35)',
     borderRadius: 13,
-    padding: 'clamp(4px, 1.2vw, 6px)',
-    maxWidth: 'calc(100vw - 24px)',
+    padding: 'var(--rules-pad)',
+    minWidth: 0,
+    flexShrink: 1,
   },
   rulesToggleBtn: {
     border: '1px solid transparent',
     borderRadius: 9,
-    padding: 'clamp(8px, 2.4vw, 11px) clamp(12px, 3vw, 20px)',
+    padding: 'var(--rules-btn-pad-y) var(--rules-btn-pad-x)',
     background: 'transparent',
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 'clamp(15px, 4vw, 22px)',
+    fontSize: 'var(--rules-font)',
     fontWeight: 800,
     cursor: 'pointer',
     whiteSpace: 'nowrap',
@@ -741,11 +934,11 @@ const S = {
     background: 'rgba(0,0,0,0.45)',
     border: '2px solid #f0d080',
     borderRadius: 12,
-    padding: 'clamp(10px, 2.6vw, 14px) clamp(10px, 3vw, 26px)',
+    padding: 'var(--banner-pad-y) var(--banner-pad-x)',
     color: '#fff',
-    fontSize: 'clamp(11px, 3.35vw, 22px)',
+    fontSize: 'var(--banner-font)',
     textAlign: 'center',
-    minHeight: 'clamp(48px, 12vw, 64px)',
+    minHeight: 'var(--banner-min-height)',
     width: '100%',
     maxWidth: 760,
     display: 'flex',
@@ -753,6 +946,7 @@ const S = {
     justifyContent: 'center',
     lineHeight: 1.15,
     overflow: 'hidden',
+    flexShrink: 0,
   },
   bannerLine: {
     display: 'block',
@@ -763,28 +957,31 @@ const S = {
   },
   cardRow: {
     width: '100%',
-    maxWidth: 660,
+    maxWidth: 'calc(100vw - 14px)',
     display: 'flex',
-    gap: 'clamp(4px, 1.6vw, 20px)',
+    gap: 'var(--card-gap)',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    paddingTop: 'clamp(34px, 9vw, 66px)',
+    paddingTop: 'var(--card-row-pad-top)',
+    paddingLeft: 'var(--card-row-side-pad)',
+    paddingRight: 'var(--card-row-side-pad)',
     overflow: 'visible',
     minWidth: 0,
+    flexShrink: 0,
   },
   cardFront: {
-    width: 'clamp(54px, 16vw, 90px)',
-    height: 'clamp(76px, 22.4vw, 126px)',
+    width: 'var(--card-w)',
+    height: 'var(--card-h)',
     background: '#fff',
-    borderRadius: 'clamp(7px, 2vw, 9px)',
+    borderRadius: 'var(--card-radius)',
     border: '2px solid #bbb',
     overflow: 'hidden',
     position: 'relative',
   },
   cardBack: {
-    width: 'clamp(54px, 16vw, 90px)',
-    height: 'clamp(76px, 22.4vw, 126px)',
-    borderRadius: 'clamp(7px, 2vw, 9px)',
+    width: 'var(--card-w)',
+    height: 'var(--card-h)',
+    borderRadius: 'var(--card-radius)',
     border: '2px solid #0a2244',
     background: '#1a3a6b',
     overflow: 'hidden',
@@ -803,7 +1000,7 @@ const S = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 'clamp(4px, 1.4vw, 7px)',
+    padding: 'var(--card-inner-pad)',
   },
   cardCornerTL: {
     display: 'flex',
@@ -822,37 +1019,38 @@ const S = {
     alignSelf: 'flex-end',
   },
   cardRank: {
-    fontSize: 'clamp(12px, 3.5vw, 17px)',
+    fontSize: 'var(--card-rank-size)',
     fontWeight: 800,
   },
   cardSuit: {
-    fontSize: 'clamp(10px, 3vw, 15px)',
+    fontSize: 'var(--card-suit-size)',
   },
   cardCenter: {
-    fontSize: 'clamp(22px, 7vw, 34px)',
+    fontSize: 'var(--card-center-size)',
   },
   arrow: {
     position: 'absolute',
-    top: 'calc(clamp(24px, 7vw, 38px) * -1)',
+    top: 'var(--arrow-top)',
     left: '50%',
     transform: 'translateX(-50%)',
     color: '#f0d080',
-    fontSize: 'clamp(20px, 6vw, 28px)',
+    fontSize: 'var(--arrow-size)',
     animation: 'bounce 0.9s ease-in-out infinite',
     zIndex: 20,
     pointerEvents: 'none',
   },
   controls: {
     display: 'flex',
-    gap: 'clamp(8px, 2vw, 12px)',
+    gap: 'var(--btn-gap)',
     flexWrap: 'wrap',
     justifyContent: 'center',
     maxWidth: 720,
     width: '100%',
+    flexShrink: 0,
   },
   btn: {
-    padding: 'clamp(11px, 3vw, 17px) clamp(16px, 4vw, 28px)',
-    fontSize: 'clamp(16px, 4.5vw, 21px)',
+    padding: 'var(--btn-pad-y) var(--btn-pad-x)',
+    fontSize: 'var(--btn-font)',
     fontWeight: 800,
     borderRadius: 12,
     border: '2px solid transparent',
@@ -926,47 +1124,51 @@ const S = {
   statsBar: {
     display: 'flex',
     alignItems: 'center',
-    gap: 'clamp(10px, 3vw, 16px)',
+    gap: 'var(--stats-gap)',
     background: 'rgba(0,0,0,0.4)',
     border: '1px solid rgba(240,208,128,0.35)',
     borderRadius: 12,
-    padding: 'clamp(9px, 2.6vw, 13px) clamp(14px, 4vw, 24px)',
-    maxWidth: 'calc(100vw - 24px)',
+    padding: 'var(--stats-pad-y) var(--stats-pad-x)',
+    minWidth: 0,
+    flexShrink: 1,
   },
   statBlock: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: 2,
+    minWidth: 0,
   },
   statNum: {
     color: '#f0d080',
-    fontSize: 'clamp(24px, 8vw, 36px)',
+    fontSize: 'var(--stat-num-size)',
     fontWeight: 800,
     lineHeight: 1,
   },
   statLabel: {
     color: 'rgba(255,255,255,0.55)',
-    fontSize: 'clamp(10px, 3vw, 15px)',
+    fontSize: 'var(--stat-label-size)',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     whiteSpace: 'nowrap',
   },
   statDivider: {
     width: 1,
-    height: 'clamp(32px, 8vw, 42px)',
+    height: 'var(--stat-divider-height)',
     background: 'rgba(240,208,128,0.25)',
+    flexShrink: 0,
   },
   resetStatsBtn: {
-    marginLeft: 4,
+    marginLeft: 0,
     background: 'none',
     border: '1px solid rgba(255,255,255,0.2)',
     borderRadius: 7,
     color: 'rgba(255,255,255,0.4)',
-    fontSize: 'clamp(11px, 3vw, 14px)',
-    padding: 'clamp(4px, 1.5vw, 7px) clamp(7px, 2vw, 10px)',
+    fontSize: 'var(--reset-font)',
+    padding: 'var(--reset-pad-y) var(--reset-pad-x)',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
+    flexShrink: 0,
   },
 };
 
