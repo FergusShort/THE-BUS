@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
-/* ─────────────────────────────────────────────
-   Deck construction
-   ───────────────────────────────────────────── */
 const SUITS = [
   { name: 'Spades', sym: '♠', color: 'black' },
   { name: 'Clubs', sym: '♣', color: 'black' },
@@ -130,9 +127,706 @@ function getVisibleCardKeys(positions, history) {
   return keys;
 }
 
-/* ─────────────────────────────────────────────
-   Card components
-   ───────────────────────────────────────────── */
+const CSS_KEYFRAMES = `
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  :root {
+    --app-padding: clamp(10px, 2.5vw, 22px);
+    --layout-gap: clamp(10px, 2.2vh, 18px);
+
+    --title-size: clamp(28px, 8vw, 42px);
+    --title-letter-spacing: clamp(3px, 1.2vw, 5px);
+
+    --top-row-gap: clamp(5px, 1.2vw, 16px);
+
+    --rules-gap: clamp(3px, 0.8vw, 8px);
+    --rules-pad: clamp(3px, 0.8vw, 6px);
+    --rules-btn-pad-y: clamp(6px, 1.2vw, 11px);
+    --rules-btn-pad-x: clamp(5px, 1.8vw, 20px);
+    --rules-font: clamp(8px, 2.4vw, 22px);
+
+    --stats-gap: clamp(5px, 1.6vw, 16px);
+    --stats-pad-y: clamp(6px, 1.4vw, 13px);
+    --stats-pad-x: clamp(6px, 1.8vw, 24px);
+    --stat-num-size: clamp(15px, 4.4vw, 36px);
+    --stat-label-size: clamp(7px, 1.8vw, 15px);
+    --stat-divider-height: clamp(24px, 6vw, 42px);
+    --reset-font: clamp(9px, 1.8vw, 14px);
+    --reset-pad-y: clamp(3px, 1vw, 7px);
+    --reset-pad-x: clamp(5px, 1.3vw, 10px);
+
+    --banner-font: clamp(11px, 3.35vw, 22px);
+    --banner-min-height: clamp(48px, 12vw, 64px);
+    --banner-pad-y: clamp(10px, 2.6vw, 14px);
+    --banner-pad-x: clamp(10px, 3vw, 26px);
+    --banner-max-width: 760px;
+
+    --card-w: clamp(44px, 14.2vw, 90px);
+    --card-h: clamp(62px, 19.9vw, 126px);
+    --card-gap: clamp(8px, 2vw, 20px);
+    --card-radius: clamp(7px, 2vw, 9px);
+    --card-row-pad-top: clamp(30px, 7.5vw, 54px);
+    --card-row-side-pad: clamp(8px, 2vw, 14px);
+    --card-inner-pad: clamp(4px, 1.4vw, 7px);
+    --card-rank-size: clamp(11px, 3.3vw, 17px);
+    --card-suit-size: clamp(9px, 2.9vw, 15px);
+    --card-center-size: clamp(20px, 6.6vw, 34px);
+    --peek-px: clamp(18px, 4.6vw, 34px);
+    --arrow-top: calc(clamp(24px, 7vw, 38px) * -1);
+    --arrow-size: clamp(20px, 6vw, 28px);
+
+    --bus-track-height: clamp(34px, 8vw, 52px);
+    --bus-size: clamp(28px, 7vw, 44px);
+    --bus-road-bottom: clamp(6px, 1.6vw, 10px);
+
+    --btn-gap: clamp(8px, 2vw, 12px);
+    --btn-pad-y: clamp(11px, 3vw, 17px);
+    --btn-pad-x: clamp(16px, 4vw, 28px);
+    --btn-font: clamp(16px, 4.5vw, 21px);
+  }
+
+  @media (orientation: landscape) and (max-height: 560px) {
+    :root {
+      --app-padding: 7px;
+      --layout-gap: 6px;
+
+      --title-size: clamp(22px, 7vh, 34px);
+      --title-letter-spacing: clamp(2px, 0.8vw, 4px);
+
+      --top-row-gap: 8px;
+
+      --rules-gap: 4px;
+      --rules-pad: 4px;
+      --rules-btn-pad-y: 6px;
+      --rules-btn-pad-x: clamp(8px, 1.5vw, 14px);
+      --rules-font: clamp(11px, 3.4vh, 16px);
+
+      --stats-gap: clamp(6px, 1.2vw, 12px);
+      --stats-pad-y: 6px;
+      --stats-pad-x: clamp(8px, 1.5vw, 14px);
+      --stat-num-size: clamp(17px, 5.8vh, 26px);
+      --stat-label-size: clamp(8px, 2.4vh, 11px);
+      --stat-divider-height: clamp(24px, 7vh, 34px);
+      --reset-font: clamp(9px, 2.5vh, 12px);
+      --reset-pad-y: 4px;
+      --reset-pad-x: 7px;
+
+      --banner-font: clamp(13px, 4vh, 18px);
+      --banner-min-height: 36px;
+      --banner-pad-y: 7px;
+      --banner-pad-x: 16px;
+      --banner-max-width: 620px;
+
+      --card-w: clamp(42px, 8.3vw, 72px);
+      --card-h: clamp(59px, 11.6vw, 101px);
+      --card-gap: clamp(8px, 1.4vw, 14px);
+      --card-radius: 7px;
+      --card-row-pad-top: 24px;
+      --card-row-side-pad: 8px;
+      --card-inner-pad: 4px;
+      --card-rank-size: clamp(10px, 3vh, 14px);
+      --card-suit-size: clamp(8px, 2.6vh, 12px);
+      --card-center-size: clamp(18px, 5vh, 28px);
+      --peek-px: 22px;
+      --arrow-top: -24px;
+      --arrow-size: 18px;
+
+      --bus-track-height: 30px;
+      --bus-size: clamp(24px, 7vh, 34px);
+      --bus-road-bottom: 6px;
+
+      --btn-gap: 7px;
+      --btn-pad-y: 8px;
+      --btn-pad-x: clamp(12px, 2vw, 20px);
+      --btn-font: clamp(13px, 4vh, 18px);
+    }
+  }
+
+  @media (orientation: landscape) and (max-height: 410px) {
+    :root {
+      --app-padding: 5px;
+      --layout-gap: 4px;
+
+      --title-size: clamp(20px, 7vh, 28px);
+
+      --rules-btn-pad-y: 5px;
+      --rules-btn-pad-x: 8px;
+      --rules-font: clamp(10px, 3.3vh, 14px);
+
+      --stats-pad-y: 5px;
+      --stats-pad-x: 8px;
+      --stat-num-size: clamp(15px, 5.4vh, 22px);
+      --stat-label-size: clamp(7px, 2.2vh, 10px);
+      --stat-divider-height: 25px;
+
+      --banner-font: clamp(12px, 3.8vh, 16px);
+      --banner-min-height: 32px;
+      --banner-pad-y: 6px;
+      --banner-pad-x: 14px;
+      --banner-max-width: 520px;
+
+      --card-w: clamp(38px, 7.5vw, 62px);
+      --card-h: clamp(54px, 10.5vw, 87px);
+      --card-gap: clamp(7px, 1.2vw, 11px);
+      --card-row-pad-top: 22px;
+      --peek-px: 18px;
+      --arrow-top: -21px;
+      --arrow-size: 16px;
+
+      --bus-track-height: 26px;
+      --bus-size: clamp(22px, 6vh, 30px);
+      --bus-road-bottom: 5px;
+
+      --btn-pad-y: 7px;
+      --btn-pad-x: 12px;
+      --btn-font: clamp(12px, 3.8vh, 16px);
+    }
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+  }
+
+  body {
+    background-color: #1a5c32;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(0,0,0,0.045) 4px, rgba(0,0,0,0.045) 5px),
+      repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,0,0,0.045) 4px, rgba(0,0,0,0.045) 5px),
+      radial-gradient(ellipse at center, #226b3a 0%, #0e3d1c 100%);
+  }
+
+  @keyframes flipIn {
+    0% { transform: rotateY(-90deg) scale(0.9); opacity: 0; }
+    100% { transform: rotateY(0deg) scale(1); opacity: 1; }
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); }
+    40% { transform: translateX(8px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(5px); }
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-6px); }
+  }
+
+@keyframes busBob {
+  0%, 100% { transform: scaleX(-1) translateY(0) rotate(-1deg); }
+  50% { transform: scaleX(-1) translateY(-4px) rotate(1deg); }
+}
+
+  @keyframes smokeDrift {
+    0% { transform: translateX(8px) scale(0.75); opacity: 0; }
+    35% { opacity: 0.85; }
+    100% { transform: translateX(-14px) scale(1.25); opacity: 0; }
+  }
+
+  @keyframes sparklePop {
+    0%, 100% { transform: scale(0.7) rotate(0deg); opacity: 0.25; }
+    50% { transform: scale(1.2) rotate(18deg); opacity: 1; }
+  }
+
+  @keyframes roadMove {
+    from { transform: translateX(0); }
+    to { transform: translateX(-34px); }
+  }
+
+  @keyframes busGlowPulse {
+    0%, 100% { opacity: 0.2; transform: scaleX(0.85); }
+    50% { opacity: 0.45; transform: scaleX(1); }
+  }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+
+  @keyframes toastOut {
+    to { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  button:disabled {
+    opacity: 0.75;
+  }
+`;
+
+const S = {
+  wrap: {
+    width: '100%',
+    height: '100dvh',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 'var(--layout-gap)',
+    padding: 'var(--app-padding)',
+    fontFamily: "'Segoe UI', system-ui, sans-serif",
+    background: 'transparent',
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    minWidth: 0,
+  },
+  cornerRulesBtn: {
+    position: 'fixed',
+    top: 'clamp(8px, 2vw, 16px)',
+    right: 'clamp(8px, 2vw, 16px)',
+    zIndex: 80,
+    background: 'rgba(0,0,0,0.42)',
+    border: '1.5px solid rgba(240,208,128,0.65)',
+    borderRadius: 999,
+    color: '#f0d080',
+    fontSize: 'clamp(12px, 3vw, 15px)',
+    fontWeight: 800,
+    padding: 'clamp(6px, 1.5vw, 9px) clamp(9px, 2.4vw, 14px)',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+  },
+  title: {
+    color: '#f0d080',
+    fontSize: 'var(--title-size)',
+    fontWeight: 800,
+    letterSpacing: 'var(--title-letter-spacing)',
+    textTransform: 'uppercase',
+    textShadow: '0 2px 12px rgba(0,0,0,0.6)',
+    margin: 0,
+    lineHeight: 1,
+    flexShrink: 0,
+  },
+  topMetaRow: {
+    display: 'flex',
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    gap: 'var(--top-row-gap)',
+    flexWrap: 'nowrap',
+    width: '100%',
+    maxWidth: 1180,
+    minWidth: 0,
+    flexShrink: 0,
+  },
+  rulesToggle: {
+    display: 'flex',
+    gap: 'var(--rules-gap)',
+    background: 'rgba(0,0,0,0.35)',
+    border: '1px solid rgba(240,208,128,0.35)',
+    borderRadius: 13,
+    padding: 'var(--rules-pad)',
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  rulesToggleBtn: {
+    border: '1px solid transparent',
+    borderRadius: 9,
+    padding: 'var(--rules-btn-pad-y) var(--rules-btn-pad-x)',
+    background: 'transparent',
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 'var(--rules-font)',
+    fontWeight: 800,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  rulesToggleBtnActive: {
+    background: '#f0d080',
+    color: '#143d22',
+    borderColor: '#f0d080',
+    cursor: 'default',
+  },
+  statsBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'var(--stats-gap)',
+    background: 'rgba(0,0,0,0.4)',
+    border: '1px solid rgba(240,208,128,0.35)',
+    borderRadius: 12,
+    padding: 'var(--stats-pad-y) var(--stats-pad-x)',
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  statBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 2,
+    minWidth: 0,
+  },
+  statNum: {
+    color: '#f0d080',
+    fontSize: 'var(--stat-num-size)',
+    fontWeight: 800,
+    lineHeight: 1,
+  },
+  statLabel: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 'var(--stat-label-size)',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    whiteSpace: 'nowrap',
+  },
+  statDivider: {
+    width: 1,
+    height: 'var(--stat-divider-height)',
+    background: 'rgba(240,208,128,0.25)',
+    flexShrink: 0,
+  },
+  resetStatsBtn: {
+    marginLeft: 0,
+    background: 'none',
+    border: '1px solid rgba(255,255,255,0.2)',
+    borderRadius: 7,
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 'var(--reset-font)',
+    padding: 'var(--reset-pad-y) var(--reset-pad-x)',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
+  banner: {
+    background: 'rgba(0,0,0,0.45)',
+    border: '2px solid #f0d080',
+    borderRadius: 12,
+    padding: 'var(--banner-pad-y) var(--banner-pad-x)',
+    color: '#fff',
+    fontSize: 'var(--banner-font)',
+    textAlign: 'center',
+    minHeight: 'var(--banner-min-height)',
+    width: '100%',
+    maxWidth: 'min(var(--banner-max-width), calc(100vw - 14px))',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 1.15,
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  bannerLine: {
+    display: 'block',
+    width: '100%',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'clip',
+  },
+  cardStage: {
+    width: '100%',
+    maxWidth: 'calc(100vw - 14px)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  busTrack: {
+    position: 'relative',
+    width: 'min(100%, 620px)',
+    height: 'var(--bus-track-height)',
+    marginBottom: 'clamp(-14px, -2vw, -6px)',
+    pointerEvents: 'none',
+    flexShrink: 0,
+  },
+  busGlow: {
+    position: 'absolute',
+    left: '7%',
+    right: '7%',
+    bottom: 0,
+    height: 'clamp(12px, 2vw, 18px)',
+    borderRadius: '50%',
+    background: 'radial-gradient(ellipse at center, rgba(240,208,128,0.35), transparent 70%)',
+    animation: 'busGlowPulse 1.1s ease-in-out infinite',
+  },
+  busRoad: {
+    position: 'absolute',
+    left: '7%',
+    right: '7%',
+    bottom: 'var(--bus-road-bottom)',
+    height: 4,
+    borderRadius: 999,
+    background: 'linear-gradient(90deg, transparent, rgba(240,208,128,0.75), transparent)',
+    boxShadow: '0 0 14px rgba(240,208,128,0.38)',
+    overflow: 'hidden',
+  },
+  busRoadLine: {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 18px, transparent 18px 34px)',
+    opacity: 0.5,
+    animation: 'roadMove 0.8s linear infinite',
+  },
+  busVehicle: {
+    position: 'absolute',
+    bottom: 'clamp(8px, 2vw, 13px)',
+    transform: 'translateX(-50%)',
+    transition: 'left 0.55s cubic-bezier(.2, .9, .25, 1.25)',
+    filter: 'drop-shadow(0 8px 8px rgba(0,0,0,0.45))',
+    zIndex: 5,
+  },
+  busEmoji: {
+    fontSize: 'var(--bus-size)',
+    animation: 'busBob 0.42s ease-in-out infinite',
+  },
+  busTrail: {
+    position: 'absolute',
+    right: '68%',
+    top: '35%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 1,
+    opacity: 0.85,
+  },
+  smokePuff: {
+    fontSize: 'clamp(13px, 3.2vw, 18px)',
+    animation: 'smokeDrift 0.75s ease-in-out infinite',
+  },
+  sparkle: {
+    fontSize: 'clamp(10px, 2.5vw, 15px)',
+    animation: 'sparklePop 0.9s ease-in-out infinite',
+  },
+  cardRow: {
+    width: '100%',
+    maxWidth: 'calc(100vw - 14px)',
+    display: 'flex',
+    gap: 'var(--card-gap)',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingTop: 'var(--card-row-pad-top)',
+    paddingLeft: 'var(--card-row-side-pad)',
+    paddingRight: 'var(--card-row-side-pad)',
+    overflow: 'visible',
+    minWidth: 0,
+    flexShrink: 0,
+  },
+  cardFront: {
+    width: 'var(--card-w)',
+    height: 'var(--card-h)',
+    background: '#fff',
+    borderRadius: 'var(--card-radius)',
+    border: '2px solid #bbb',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  cardBack: {
+    width: 'var(--card-w)',
+    height: 'var(--card-h)',
+    borderRadius: 'var(--card-radius)',
+    border: '2px solid #0a2244',
+    background: '#1a3a6b',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  cardBackPattern: {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage:
+      'repeating-linear-gradient(45deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 2px, transparent 2px, transparent 9px)',
+  },
+  cardInner: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 'var(--card-inner-pad)',
+  },
+  cardCornerTL: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    width: '100%',
+    lineHeight: 1.05,
+  },
+  cardCornerBR: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    width: '100%',
+    lineHeight: 1.05,
+    transform: 'rotate(180deg)',
+    alignSelf: 'flex-end',
+  },
+  cardRank: {
+    fontSize: 'var(--card-rank-size)',
+    fontWeight: 800,
+  },
+  cardSuit: {
+    fontSize: 'var(--card-suit-size)',
+  },
+  cardCenter: {
+    fontSize: 'var(--card-center-size)',
+  },
+  arrow: {
+    position: 'absolute',
+    top: 'var(--arrow-top)',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    color: '#f0d080',
+    fontSize: 'var(--arrow-size)',
+    animation: 'bounce 0.9s ease-in-out infinite',
+    zIndex: 20,
+    pointerEvents: 'none',
+  },
+  controls: {
+    display: 'flex',
+    gap: 'var(--btn-gap)',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    maxWidth: 720,
+    width: '100%',
+    flexShrink: 0,
+  },
+  btn: {
+    padding: 'var(--btn-pad-y) var(--btn-pad-x)',
+    fontSize: 'var(--btn-font)',
+    fontWeight: 800,
+    borderRadius: 12,
+    border: '2px solid transparent',
+    cursor: 'pointer',
+    letterSpacing: 0.5,
+    transition: 'opacity 0.15s, transform 0.1s',
+    touchAction: 'manipulation',
+    whiteSpace: 'nowrap',
+  },
+  btnHigher: { background: '#2a9d4e', color: '#fff', borderColor: '#1d7038' },
+  btnLower: { background: '#c0392b', color: '#fff', borderColor: '#922b21' },
+  btnEven: { background: '#2471a3', color: '#fff', borderColor: '#1a5276' },
+  btnOdd: { background: '#8e44ad', color: '#fff', borderColor: '#633076' },
+  btnRed: { background: '#c0392b', color: '#fff', borderColor: '#922b21' },
+  btnBlack: { background: '#222', color: '#fff', borderColor: '#000' },
+  btnRestart: { background: 'rgba(255,255,255,0.15)', color: '#f0d080', borderColor: '#f0d080' },
+  rulesOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.72)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    zIndex: 300,
+    animation: 'fadeIn 0.2s ease',
+  },
+  rulesBox: {
+    width: 'min(560px, 92vw)',
+    maxHeight: '82dvh',
+    overflowY: 'auto',
+    background: '#123d24',
+    border: '3px solid #f0d080',
+    borderRadius: 20,
+    padding: 'clamp(18px, 4vw, 28px)',
+    boxShadow: '0 16px 50px rgba(0,0,0,0.5)',
+  },
+  rulesTitle: {
+    color: '#f0d080',
+    fontSize: 'clamp(24px, 6vw, 34px)',
+    fontWeight: 900,
+    textAlign: 'center',
+    marginBottom: 14,
+    letterSpacing: 1,
+  },
+  rulesList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  rulesLine: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 9,
+    color: '#fff',
+    fontSize: 'clamp(14px, 3.6vw, 17px)',
+    lineHeight: 1.35,
+  },
+  rulesBullet: {
+    color: '#f0d080',
+    fontWeight: 900,
+    flexShrink: 0,
+  },
+  rulesCloseBtn: {
+    display: 'block',
+    margin: '20px auto 0',
+  },
+  penaltyToast: {
+    position: 'fixed',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    background: 'rgba(160,20,20,0.97)',
+    border: '2px solid #ff7070',
+    borderRadius: 18,
+    padding: '24px 48px',
+    textAlign: 'center',
+    zIndex: 100,
+    animation: 'toastIn 0.3s ease, toastOut 0.35s ease 1.9s forwards',
+    pointerEvents: 'none',
+    maxWidth: '80vw',
+  },
+  penaltyMsg: {
+    color: '#fff',
+    fontSize: 'clamp(26px,6vw,40px)',
+    fontWeight: 800,
+  },
+  penaltySub: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 16,
+    marginTop: 5,
+  },
+  winnerOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.72)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 200,
+    animation: 'fadeIn 0.4s ease',
+    padding: 20,
+  },
+  winnerBox: {
+    background: '#1a6b3a',
+    border: '3px solid #f0d080',
+    borderRadius: 22,
+    padding: 'clamp(34px,6vw,52px) clamp(40px,8vw,76px)',
+    textAlign: 'center',
+  },
+  winnerText: {
+    color: '#f0d080',
+    fontSize: 'clamp(32px,7vw,46px)',
+    fontWeight: 800,
+    letterSpacing: 4,
+  },
+  winnerSub: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 18,
+    marginTop: 8,
+  },
+};
+
 const CardBack = ({ style: extra }) => (
   <div style={{ ...S.cardBack, ...extra }}>
     <div style={S.cardBackPattern} />
@@ -163,9 +857,6 @@ const CardFace = ({ card, style: extra }) => {
   );
 };
 
-/* ─────────────────────────────────────────────
-   CardSlot
-   ───────────────────────────────────────────── */
 const PEEK_PX = 'var(--peek-px)';
 
 const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
@@ -206,16 +897,36 @@ const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
           animation: animKey ? 'flipIn 0.35s ease forwards' : undefined,
         }}
       >
-        <style>{CSS_KEYFRAMES}</style>
         {revealed ? <CardFace card={current} /> : <CardBack />}
       </div>
     </div>
   );
 };
 
-/* ─────────────────────────────────────────────
-   Main game
-   ───────────────────────────────────────────── */
+const BusRunner = ({ activeIdx }) => {
+  const safeIdx = Math.max(0, Math.min(4, activeIdx));
+  const leftPercent = `${10 + safeIdx * 20}%`;
+
+  return (
+    <div style={S.busTrack}>
+      <div style={S.busGlow} />
+
+      <div style={S.busRoad}>
+        <div style={S.busRoadLine} />
+      </div>
+
+      <div style={{ ...S.busVehicle, left: leftPercent }}>
+        <div style={S.busTrail}>
+          <span style={S.smokePuff}>💨</span>
+          <span style={S.sparkle}>✨</span>
+        </div>
+
+        <div style={S.busEmoji}>🚌</div>
+      </div>
+    </div>
+  );
+};
+
 const CardGame = () => {
   const [ruleset, setRuleset] = useState(RULESETS.WELLY);
   const [positions, setPositions] = useState([null, null, null, null, null]);
@@ -641,21 +1352,25 @@ const CardGame = () => {
         {getBannerText()}
       </div>
 
-      <div style={S.cardRow}>
-        {positions.map((card, i) => (
-          <div
-            key={i}
-            style={{ animation: shakeSlot === i ? 'shake 0.4s ease' : undefined }}
-          >
-            <CardSlot
-              current={card}
-              history={history[i]}
-              revealed={revealed[i]}
-              isActive={i === activeIdx && !gameOver}
-              animKey={i === activeIdx ? animKey : 0}
-            />
-          </div>
-        ))}
+      <div style={S.cardStage}>
+        <BusRunner activeIdx={activeIdx} />
+
+        <div style={S.cardRow}>
+          {positions.map((card, i) => (
+            <div
+              key={i}
+              style={{ animation: shakeSlot === i ? 'shake 0.4s ease' : undefined }}
+            >
+              <CardSlot
+                current={card}
+                history={history[i]}
+                revealed={revealed[i]}
+                isActive={i === activeIdx && !gameOver}
+                animKey={i === activeIdx ? animKey : 0}
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       <div style={S.controls}>
@@ -726,599 +1441,6 @@ const CardGame = () => {
       )}
     </div>
   );
-};
-
-/* ─────────────────────────────────────────────
-   Keyframes + global
-   ───────────────────────────────────────────── */
-const CSS_KEYFRAMES = `
-  *, *::before, *::after { box-sizing: border-box; }
-
-  :root {
-    --app-padding: clamp(10px, 2.5vw, 22px);
-    --layout-gap: clamp(10px, 2.2vh, 18px);
-
-    --title-size: clamp(28px, 8vw, 42px);
-    --title-letter-spacing: clamp(3px, 1.2vw, 5px);
-
-    --top-row-gap: clamp(5px, 1.2vw, 16px);
-
-    --rules-gap: clamp(3px, 0.8vw, 8px);
-    --rules-pad: clamp(3px, 0.8vw, 6px);
-    --rules-btn-pad-y: clamp(6px, 1.2vw, 11px);
-    --rules-btn-pad-x: clamp(5px, 1.8vw, 20px);
-    --rules-font: clamp(8px, 2.4vw, 22px);
-
-    --stats-gap: clamp(5px, 1.6vw, 16px);
-    --stats-pad-y: clamp(6px, 1.4vw, 13px);
-    --stats-pad-x: clamp(6px, 1.8vw, 24px);
-    --stat-num-size: clamp(15px, 4.4vw, 36px);
-    --stat-label-size: clamp(7px, 1.8vw, 15px);
-    --stat-divider-height: clamp(24px, 6vw, 42px);
-    --reset-font: clamp(9px, 1.8vw, 14px);
-    --reset-pad-y: clamp(3px, 1vw, 7px);
-    --reset-pad-x: clamp(5px, 1.3vw, 10px);
-
-    --banner-font: clamp(11px, 3.35vw, 22px);
-    --banner-min-height: clamp(48px, 12vw, 64px);
-    --banner-pad-y: clamp(10px, 2.6vw, 14px);
-    --banner-pad-x: clamp(10px, 3vw, 26px);
-    --banner-max-width: 760px;
-
-    --card-w: clamp(44px, 14.2vw, 90px);
-    --card-h: clamp(62px, 19.9vw, 126px);
-    --card-gap: clamp(8px, 2vw, 20px);
-    --card-radius: clamp(7px, 2vw, 9px);
-    --card-row-pad-top: clamp(34px, 9vw, 66px);
-    --card-row-side-pad: clamp(8px, 2vw, 14px);
-    --card-inner-pad: clamp(4px, 1.4vw, 7px);
-    --card-rank-size: clamp(11px, 3.3vw, 17px);
-    --card-suit-size: clamp(9px, 2.9vw, 15px);
-    --card-center-size: clamp(20px, 6.6vw, 34px);
-    --peek-px: clamp(18px, 4.6vw, 34px);
-    --arrow-top: calc(clamp(24px, 7vw, 38px) * -1);
-    --arrow-size: clamp(20px, 6vw, 28px);
-
-    --btn-gap: clamp(8px, 2vw, 12px);
-    --btn-pad-y: clamp(11px, 3vw, 17px);
-    --btn-pad-x: clamp(16px, 4vw, 28px);
-    --btn-font: clamp(16px, 4.5vw, 21px);
-  }
-
-  @media (orientation: landscape) and (max-height: 560px) {
-    :root {
-      --app-padding: 7px;
-      --layout-gap: 6px;
-
-      --title-size: clamp(22px, 7vh, 34px);
-      --title-letter-spacing: clamp(2px, 0.8vw, 4px);
-
-      --top-row-gap: 8px;
-
-      --rules-gap: 4px;
-      --rules-pad: 4px;
-      --rules-btn-pad-y: 6px;
-      --rules-btn-pad-x: clamp(8px, 1.5vw, 14px);
-      --rules-font: clamp(11px, 3.4vh, 16px);
-
-      --stats-gap: clamp(6px, 1.2vw, 12px);
-      --stats-pad-y: 6px;
-      --stats-pad-x: clamp(8px, 1.5vw, 14px);
-      --stat-num-size: clamp(17px, 5.8vh, 26px);
-      --stat-label-size: clamp(8px, 2.4vh, 11px);
-      --stat-divider-height: clamp(24px, 7vh, 34px);
-      --reset-font: clamp(9px, 2.5vh, 12px);
-      --reset-pad-y: 4px;
-      --reset-pad-x: 7px;
-
-      --banner-font: clamp(13px, 4vh, 18px);
-      --banner-min-height: 36px;
-      --banner-pad-y: 7px;
-      --banner-pad-x: 16px;
-      --banner-max-width: 620px;
-
-      --card-w: clamp(42px, 8.3vw, 72px);
-      --card-h: clamp(59px, 11.6vw, 101px);
-      --card-gap: clamp(8px, 1.4vw, 14px);
-      --card-radius: 7px;
-      --card-row-pad-top: 28px;
-      --card-row-side-pad: 8px;
-      --card-inner-pad: 4px;
-      --card-rank-size: clamp(10px, 3vh, 14px);
-      --card-suit-size: clamp(8px, 2.6vh, 12px);
-      --card-center-size: clamp(18px, 5vh, 28px);
-      --peek-px: 22px;
-      --arrow-top: -26px;
-      --arrow-size: 20px;
-
-      --btn-gap: 7px;
-      --btn-pad-y: 8px;
-      --btn-pad-x: clamp(12px, 2vw, 20px);
-      --btn-font: clamp(13px, 4vh, 18px);
-    }
-  }
-
-  @media (orientation: landscape) and (max-height: 410px) {
-    :root {
-      --app-padding: 5px;
-      --layout-gap: 4px;
-
-      --title-size: clamp(20px, 7vh, 28px);
-
-      --rules-btn-pad-y: 5px;
-      --rules-btn-pad-x: 8px;
-      --rules-font: clamp(10px, 3.3vh, 14px);
-
-      --stats-pad-y: 5px;
-      --stats-pad-x: 8px;
-      --stat-num-size: clamp(15px, 5.4vh, 22px);
-      --stat-label-size: clamp(7px, 2.2vh, 10px);
-      --stat-divider-height: 25px;
-
-      --banner-font: clamp(12px, 3.8vh, 16px);
-      --banner-min-height: 32px;
-      --banner-pad-y: 6px;
-      --banner-pad-x: 14px;
-      --banner-max-width: 520px;
-
-      --card-w: clamp(38px, 7.5vw, 62px);
-      --card-h: clamp(54px, 10.5vw, 87px);
-      --card-gap: clamp(7px, 1.2vw, 11px);
-      --card-row-pad-top: 24px;
-      --peek-px: 18px;
-      --arrow-top: -23px;
-      --arrow-size: 18px;
-
-      --btn-pad-y: 7px;
-      --btn-pad-x: 12px;
-      --btn-font: clamp(12px, 3.8vh, 16px);
-    }
-  }
-
-  html, body {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    min-width: 0;
-    height: 100%;
-    overflow: hidden;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-  }
-
-  #root {
-    width: 100%;
-    height: 100%;
-    min-width: 0;
-  }
-
-  body {
-    background-color: #1a5c32;
-    background-image:
-      repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(0,0,0,0.045) 4px, rgba(0,0,0,0.045) 5px),
-      repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,0,0,0.045) 4px, rgba(0,0,0,0.045) 5px),
-      radial-gradient(ellipse at center, #226b3a 0%, #0e3d1c 100%);
-  }
-
-  @keyframes flipIn {
-    0% { transform: rotateY(-90deg) scale(0.9); opacity: 0; }
-    100% { transform: rotateY(0deg) scale(1); opacity: 1; }
-  }
-
-  @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    20% { transform: translateX(-8px); }
-    40% { transform: translateX(8px); }
-    60% { transform: translateX(-5px); }
-    80% { transform: translateX(5px); }
-  }
-
-  @keyframes bounce {
-    0%, 100% { transform: translateX(-50%) translateY(0); }
-    50% { transform: translateX(-50%) translateY(-6px); }
-  }
-
-  @keyframes toastIn {
-    from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  }
-
-  @keyframes toastOut {
-    to { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  button {
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-  }
-
-  button:disabled {
-    opacity: 0.75;
-  }
-`;
-
-/* ─────────────────────────────────────────────
-   Styles
-   ───────────────────────────────────────────── */
-const S = {
-  wrap: {
-    width: '100%',
-    height: '100dvh',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 'var(--layout-gap)',
-    padding: 'var(--app-padding)',
-    fontFamily: "'Segoe UI', system-ui, sans-serif",
-    background: 'transparent',
-    overflowX: 'hidden',
-    overflowY: 'auto',
-    WebkitOverflowScrolling: 'touch',
-    minWidth: 0,
-  },
-  cornerRulesBtn: {
-    position: 'fixed',
-    top: 'clamp(8px, 2vw, 16px)',
-    right: 'clamp(8px, 2vw, 16px)',
-    zIndex: 80,
-    background: 'rgba(0,0,0,0.42)',
-    border: '1.5px solid rgba(240,208,128,0.65)',
-    borderRadius: 999,
-    color: '#f0d080',
-    fontSize: 'clamp(12px, 3vw, 15px)',
-    fontWeight: 800,
-    padding: 'clamp(6px, 1.5vw, 9px) clamp(9px, 2.4vw, 14px)',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
-  },
-  title: {
-    color: '#f0d080',
-    fontSize: 'var(--title-size)',
-    fontWeight: 800,
-    letterSpacing: 'var(--title-letter-spacing)',
-    textTransform: 'uppercase',
-    textShadow: '0 2px 12px rgba(0,0,0,0.6)',
-    margin: 0,
-    lineHeight: 1,
-    flexShrink: 0,
-  },
-  topMetaRow: {
-    display: 'flex',
-    alignItems: 'stretch',
-    justifyContent: 'center',
-    gap: 'var(--top-row-gap)',
-    flexWrap: 'nowrap',
-    width: '100%',
-    maxWidth: 1180,
-    minWidth: 0,
-    flexShrink: 0,
-  },
-  rulesToggle: {
-    display: 'flex',
-    gap: 'var(--rules-gap)',
-    background: 'rgba(0,0,0,0.35)',
-    border: '1px solid rgba(240,208,128,0.35)',
-    borderRadius: 13,
-    padding: 'var(--rules-pad)',
-    minWidth: 0,
-    flexShrink: 1,
-  },
-  rulesToggleBtn: {
-    border: '1px solid transparent',
-    borderRadius: 9,
-    padding: 'var(--rules-btn-pad-y) var(--rules-btn-pad-x)',
-    background: 'transparent',
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 'var(--rules-font)',
-    fontWeight: 800,
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-  },
-  rulesToggleBtnActive: {
-    background: '#f0d080',
-    color: '#143d22',
-    borderColor: '#f0d080',
-    cursor: 'default',
-  },
-  banner: {
-    background: 'rgba(0,0,0,0.45)',
-    border: '2px solid #f0d080',
-    borderRadius: 12,
-    padding: 'var(--banner-pad-y) var(--banner-pad-x)',
-    color: '#fff',
-    fontSize: 'var(--banner-font)',
-    textAlign: 'center',
-    minHeight: 'var(--banner-min-height)',
-    width: '100%',
-    maxWidth: 'min(var(--banner-max-width), calc(100vw - 14px))',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    lineHeight: 1.15,
-    overflow: 'hidden',
-    flexShrink: 0,
-  },
-  bannerLine: {
-    display: 'block',
-    width: '100%',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'clip',
-  },
-  cardRow: {
-    width: '100%',
-    maxWidth: 'calc(100vw - 14px)',
-    display: 'flex',
-    gap: 'var(--card-gap)',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    paddingTop: 'var(--card-row-pad-top)',
-    paddingLeft: 'var(--card-row-side-pad)',
-    paddingRight: 'var(--card-row-side-pad)',
-    overflow: 'visible',
-    minWidth: 0,
-    flexShrink: 0,
-  },
-  cardFront: {
-    width: 'var(--card-w)',
-    height: 'var(--card-h)',
-    background: '#fff',
-    borderRadius: 'var(--card-radius)',
-    border: '2px solid #bbb',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  cardBack: {
-    width: 'var(--card-w)',
-    height: 'var(--card-h)',
-    borderRadius: 'var(--card-radius)',
-    border: '2px solid #0a2244',
-    background: '#1a3a6b',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  cardBackPattern: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage:
-      'repeating-linear-gradient(45deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 2px, transparent 2px, transparent 9px)',
-  },
-  cardInner: {
-    width: '100%',
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 'var(--card-inner-pad)',
-  },
-  cardCornerTL: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    width: '100%',
-    lineHeight: 1.05,
-  },
-  cardCornerBR: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    width: '100%',
-    lineHeight: 1.05,
-    transform: 'rotate(180deg)',
-    alignSelf: 'flex-end',
-  },
-  cardRank: {
-    fontSize: 'var(--card-rank-size)',
-    fontWeight: 800,
-  },
-  cardSuit: {
-    fontSize: 'var(--card-suit-size)',
-  },
-  cardCenter: {
-    fontSize: 'var(--card-center-size)',
-  },
-  arrow: {
-    position: 'absolute',
-    top: 'var(--arrow-top)',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    color: '#f0d080',
-    fontSize: 'var(--arrow-size)',
-    animation: 'bounce 0.9s ease-in-out infinite',
-    zIndex: 20,
-    pointerEvents: 'none',
-  },
-  controls: {
-    display: 'flex',
-    gap: 'var(--btn-gap)',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    maxWidth: 720,
-    width: '100%',
-    flexShrink: 0,
-  },
-  btn: {
-    padding: 'var(--btn-pad-y) var(--btn-pad-x)',
-    fontSize: 'var(--btn-font)',
-    fontWeight: 800,
-    borderRadius: 12,
-    border: '2px solid transparent',
-    cursor: 'pointer',
-    letterSpacing: 0.5,
-    transition: 'opacity 0.15s, transform 0.1s',
-    touchAction: 'manipulation',
-    whiteSpace: 'nowrap',
-  },
-  btnHigher: { background: '#2a9d4e', color: '#fff', borderColor: '#1d7038' },
-  btnLower: { background: '#c0392b', color: '#fff', borderColor: '#922b21' },
-  btnEven: { background: '#2471a3', color: '#fff', borderColor: '#1a5276' },
-  btnOdd: { background: '#8e44ad', color: '#fff', borderColor: '#633076' },
-  btnRed: { background: '#c0392b', color: '#fff', borderColor: '#922b21' },
-  btnBlack: { background: '#222', color: '#fff', borderColor: '#000' },
-  btnRestart: { background: 'rgba(255,255,255,0.15)', color: '#f0d080', borderColor: '#f0d080' },
-  rulesOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.72)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-    zIndex: 300,
-    animation: 'fadeIn 0.2s ease',
-  },
-  rulesBox: {
-    width: 'min(560px, 92vw)',
-    maxHeight: '82dvh',
-    overflowY: 'auto',
-    background: '#123d24',
-    border: '3px solid #f0d080',
-    borderRadius: 20,
-    padding: 'clamp(18px, 4vw, 28px)',
-    boxShadow: '0 16px 50px rgba(0,0,0,0.5)',
-  },
-  rulesTitle: {
-    color: '#f0d080',
-    fontSize: 'clamp(24px, 6vw, 34px)',
-    fontWeight: 900,
-    textAlign: 'center',
-    marginBottom: 14,
-    letterSpacing: 1,
-  },
-  rulesList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-  },
-  rulesLine: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 9,
-    color: '#fff',
-    fontSize: 'clamp(14px, 3.6vw, 17px)',
-    lineHeight: 1.35,
-  },
-  rulesBullet: {
-    color: '#f0d080',
-    fontWeight: 900,
-    flexShrink: 0,
-  },
-  rulesCloseBtn: {
-    display: 'block',
-    margin: '20px auto 0',
-  },
-  penaltyToast: {
-    position: 'fixed',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    background: 'rgba(160,20,20,0.97)',
-    border: '2px solid #ff7070',
-    borderRadius: 18,
-    padding: '24px 48px',
-    textAlign: 'center',
-    zIndex: 100,
-    animation: 'toastIn 0.3s ease, toastOut 0.35s ease 1.9s forwards',
-    pointerEvents: 'none',
-    maxWidth: '80vw',
-  },
-  penaltyMsg: {
-    color: '#fff',
-    fontSize: 'clamp(26px,6vw,40px)',
-    fontWeight: 800,
-  },
-  penaltySub: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 16,
-    marginTop: 5,
-  },
-  winnerOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.72)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 200,
-    animation: 'fadeIn 0.4s ease',
-    padding: 20,
-  },
-  winnerBox: {
-    background: '#1a6b3a',
-    border: '3px solid #f0d080',
-    borderRadius: 22,
-    padding: 'clamp(34px,6vw,52px) clamp(40px,8vw,76px)',
-    textAlign: 'center',
-  },
-  winnerText: {
-    color: '#f0d080',
-    fontSize: 'clamp(32px,7vw,46px)',
-    fontWeight: 800,
-    letterSpacing: 4,
-  },
-  winnerSub: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 18,
-    marginTop: 8,
-  },
-  statsBar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 'var(--stats-gap)',
-    background: 'rgba(0,0,0,0.4)',
-    border: '1px solid rgba(240,208,128,0.35)',
-    borderRadius: 12,
-    padding: 'var(--stats-pad-y) var(--stats-pad-x)',
-    minWidth: 0,
-    flexShrink: 1,
-  },
-  statBlock: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 2,
-    minWidth: 0,
-  },
-  statNum: {
-    color: '#f0d080',
-    fontSize: 'var(--stat-num-size)',
-    fontWeight: 800,
-    lineHeight: 1,
-  },
-  statLabel: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 'var(--stat-label-size)',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    whiteSpace: 'nowrap',
-  },
-  statDivider: {
-    width: 1,
-    height: 'var(--stat-divider-height)',
-    background: 'rgba(240,208,128,0.25)',
-    flexShrink: 0,
-  },
-  resetStatsBtn: {
-    marginLeft: 0,
-    background: 'none',
-    border: '1px solid rgba(255,255,255,0.2)',
-    borderRadius: 7,
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 'var(--reset-font)',
-    padding: 'var(--reset-pad-y) var(--reset-pad-x)',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    flexShrink: 0,
-  },
 };
 
 export default CardGame;
