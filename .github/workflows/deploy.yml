@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # Trigger deployment on push to the main branch
+      - main
 
 jobs:
   deploy:
@@ -16,7 +16,7 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '14'  # Specify the Node.js version you are using
+        node-version: '18'
 
     - name: Set up GitHub credentials
       run: |
@@ -24,15 +24,15 @@ jobs:
         git config --global user.name "GitHub Actions"
         git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
 
-    - name: Change to project directory
-      run: cd The-Bus-CardGame
-
     - name: Install dependencies
       run: |
         cd The-Bus-CardGame
         npm install
 
     - name: Build the project
+      env:
+        REACT_APP_SUPABASE_URL: ${{ secrets.REACT_APP_SUPABASE_URL }}
+        REACT_APP_SUPABASE_ANON_KEY: ${{ secrets.REACT_APP_SUPABASE_ANON_KEY }}
       run: |
         cd The-Bus-CardGame
         npm run build
