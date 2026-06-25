@@ -1,48 +1,50 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from './lib/supabaseClient';
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { supabase } from "./lib/supabaseClient";
 
 const SUITS = [
-  { name: 'Spades', sym: '♠', color: 'black' },
-  { name: 'Clubs', sym: '♣', color: 'black' },
-  { name: 'Hearts', sym: '♥', color: 'red' },
-  { name: 'Diamonds', sym: '♦', color: 'red' },
+  { name: "Spades", sym: "♠", color: "black" },
+  { name: "Clubs", sym: "♣", color: "black" },
+  { name: "Hearts", sym: "♥", color: "red" },
+  { name: "Diamonds", sym: "♦", color: "red" },
 ];
 
 const RANKS = [
-  { val: 2, display: '2' },
-  { val: 3, display: '3' },
-  { val: 4, display: '4' },
-  { val: 5, display: '5' },
-  { val: 6, display: '6' },
-  { val: 7, display: '7' },
-  { val: 8, display: '8' },
-  { val: 9, display: '9' },
-  { val: 10, display: '10' },
-  { val: 11, display: 'J' },
-  { val: 12, display: 'Q' },
-  { val: 13, display: 'K' },
-  { val: 14, display: 'A' },
+  { val: 2, display: "2" },
+  { val: 3, display: "3" },
+  { val: 4, display: "4" },
+  { val: 5, display: "5" },
+  { val: 6, display: "6" },
+  { val: 7, display: "7" },
+  { val: 8, display: "8" },
+  { val: 9, display: "9" },
+  { val: 10, display: "10" },
+  { val: 11, display: "J" },
+  { val: 12, display: "Q" },
+  { val: 13, display: "K" },
+  { val: 14, display: "A" },
 ];
 
-const RANK_NAMES = { 11: 'Jack', 12: 'Queen', 13: 'King', 14: 'Ace' };
-const FULL_DECK = SUITS.flatMap(suit => RANKS.map(rank => ({ ...rank, ...suit })));
+const RANK_NAMES = { 11: "Jack", 12: "Queen", 13: "King", 14: "Ace" };
+const FULL_DECK = SUITS.flatMap((suit) =>
+  RANKS.map((rank) => ({ ...rank, ...suit })),
+);
 
 const RULESETS = {
-  WELLY: 'welly',
-  AUCKLAND: 'auckland',
+  WELLY: "welly",
+  AUCKLAND: "auckland",
 };
 
 const PENALTIES = [
-  { label: '1 Sip 😬', sips: 1 },
-  { label: '2 Sips 😅', sips: 2 },
-  { label: '3 Sips 😰', sips: 3 },
-  { label: 'Half Your Drink 🍺', sips: 4 },
-  { label: 'Finish Your Drink 💀', sips: 8 },
+  { label: "1 Sip 😬", sips: 1 },
+  { label: "2 Sips 😅", sips: 2 },
+  { label: "3 Sips 😰", sips: 3 },
+  { label: "Half Your Drink 🍺", sips: 4 },
+  { label: "Finish Your Drink 💀", sips: 8 },
 ];
 
 const SIPS_PER_DRINK = 8;
-const LS_KEY = 'the-bus-lifetime-sips';
-const PLAYER_NAME_COOKIE = 'the_bus_player_name';
+const LS_KEY = "the-bus-lifetime-sips";
+const PLAYER_NAME_COOKIE = "the_bus_player_name";
 
 const CRASH_BEFORE_POPUP_MS = 1000;
 const POPUP_VISIBLE_MS = 2300;
@@ -52,15 +54,15 @@ const BUS_ENTER_MS = 850;
 
 function getCookie(name) {
   const cookie = document.cookie
-    .split('; ')
-    .find(row => row.startsWith(`${name}=`));
+    .split("; ")
+    .find((row) => row.startsWith(`${name}=`));
 
-  if (!cookie) return '';
+  if (!cookie) return "";
 
   try {
-    return decodeURIComponent(cookie.split('=').slice(1).join('=') || '');
+    return decodeURIComponent(cookie.split("=").slice(1).join("=") || "");
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -71,7 +73,7 @@ function setCookie(name, value, days = 365) {
 
 function loadLifetimeSips() {
   try {
-    return parseInt(localStorage.getItem(LS_KEY) || '0', 10) || 0;
+    return parseInt(localStorage.getItem(LS_KEY) || "0", 10) || 0;
   } catch {
     return 0;
   }
@@ -92,11 +94,11 @@ function savePlayerName(name) {
 }
 
 function clearPlayerName() {
-  setCookie(PLAYER_NAME_COOKIE, '', -1);
+  setCookie(PLAYER_NAME_COOKIE, "", -1);
 }
 
 function cleanPlayerName(name) {
-  return name.trim().replace(/\s+/g, ' ').slice(0, 20);
+  return name.trim().replace(/\s+/g, " ").slice(0, 20);
 }
 
 function nameKey(name) {
@@ -132,7 +134,7 @@ function cardValueForRuleset(card, currentRuleset) {
 }
 
 function cardKey(card) {
-  if (!card) return '';
+  if (!card) return "";
   return `${card.name}-${card.val}`;
 }
 
@@ -149,27 +151,26 @@ function getInsideOutsideResult(card, a, b, currentRuleset) {
   const high = Math.max(aValue, bValue);
 
   if (cardValue === low || cardValue === high) {
-    return 'even';
+    return "even";
   }
 
   if (cardValue > low && cardValue < high) {
-    return 'inside';
+    return "inside";
   }
 
-  return 'outside';
+  return "outside";
 }
 
 function getVisibleCardKeys(positions, history) {
   const keys = new Set();
 
-  positions.forEach(card => {
+  positions.forEach((card) => {
     if (card) keys.add(cardKey(card));
   });
 
-  history.forEach(slotHistory => {
-    const visiblePreviousCard = slotHistory.length > 0
-      ? slotHistory[slotHistory.length - 1]
-      : null;
+  history.forEach((slotHistory) => {
+    const visiblePreviousCard =
+      slotHistory.length > 0 ? slotHistory[slotHistory.length - 1] : null;
 
     if (visiblePreviousCard) {
       keys.add(cardKey(visiblePreviousCard));
@@ -186,9 +187,9 @@ async function findLeaderboardPlayer(name) {
   if (!cleanName) return null;
 
   const { data, error } = await supabase
-    .from('sip_leaderboard')
-    .select('name, sips')
-    .eq('name_key', cleanName.toLowerCase())
+    .from("sip_leaderboard")
+    .select("name, sips")
+    .eq("name_key", cleanName.toLowerCase())
     .maybeSingle();
 
   if (error) throw error;
@@ -201,7 +202,7 @@ async function ensureOnlinePlayer(name) {
   const cleanName = cleanPlayerName(name);
   if (!cleanName) return;
 
-  const { error } = await supabase.rpc('ensure_leaderboard_player', {
+  const { error } = await supabase.rpc("ensure_leaderboard_player", {
     p_name: cleanName,
   });
 
@@ -214,7 +215,7 @@ async function addOnlineSips(name, sips) {
   const cleanName = cleanPlayerName(name);
   if (!cleanName) return;
 
-  const { error } = await supabase.rpc('add_sips_to_leaderboard', {
+  const { error } = await supabase.rpc("add_sips_to_leaderboard", {
     p_name: cleanName,
     p_sips: sips,
   });
@@ -228,7 +229,7 @@ async function resetOnlineSips(name) {
   const cleanName = cleanPlayerName(name);
   if (!cleanName) return;
 
-  const { error } = await supabase.rpc('reset_sips_for_leaderboard', {
+  const { error } = await supabase.rpc("reset_sips_for_leaderboard", {
     p_name: cleanName,
   });
 
@@ -239,9 +240,9 @@ async function fetchLeaderboard() {
   if (!supabase) return [];
 
   const { data, error } = await supabase
-    .from('sip_leaderboard')
-    .select('name, sips, updated_at')
-    .order('sips', { ascending: false })
+    .from("sip_leaderboard")
+    .select("name, sips, updated_at")
+    .order("sips", { ascending: false })
     .limit(20);
 
   if (error) throw error;
@@ -1156,30 +1157,40 @@ const CSS = `
   }
 `;
 
-const CardBack = ({ extraClass = '' }) => (
+const CardBack = ({ extraClass = "" }) => (
   <div className={`card cardBack ${extraClass}`}>
     <div className="cardBackPattern" />
   </div>
 );
 
-const CardFace = ({ card, extraClass = '' }) => {
+const CardFace = ({ card, extraClass = "" }) => {
   if (!card) return <CardBack extraClass={extraClass} />;
 
-  const col = card.color === 'red' ? '#cc2200' : '#111';
+  const col = card.color === "red" ? "#cc2200" : "#111";
 
   return (
     <div className={`card cardFront ${extraClass}`}>
       <div className="cardInner">
         <div className="corner">
-          <span className="rank" style={{ color: col }}>{card.display}</span>
-          <span className="suit" style={{ color: col }}>{card.sym}</span>
+          <span className="rank" style={{ color: col }}>
+            {card.display}
+          </span>
+          <span className="suit" style={{ color: col }}>
+            {card.sym}
+          </span>
         </div>
 
-        <div className="centerSuit" style={{ color: col }}>{card.sym}</div>
+        <div className="centerSuit" style={{ color: col }}>
+          {card.sym}
+        </div>
 
         <div className="corner br">
-          <span className="rank" style={{ color: col }}>{card.display}</span>
-          <span className="suit" style={{ color: col }}>{card.sym}</span>
+          <span className="rank" style={{ color: col }}>
+            {card.display}
+          </span>
+          <span className="suit" style={{ color: col }}>
+            {card.sym}
+          </span>
         </div>
       </div>
     </div>
@@ -1189,8 +1200,8 @@ const CardFace = ({ card, extraClass = '' }) => {
 const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
   const prevCard = history.length > 0 ? history[history.length - 1] : null;
   const totalHeight = prevCard
-    ? 'calc(clamp(62px, 19.9vw, 126px) + clamp(18px, 4.6vw, 34px))'
-    : 'clamp(62px, 19.9vw, 126px)';
+    ? "calc(clamp(62px, 19.9vw, 126px) + clamp(18px, 4.6vw, 34px))"
+    : "clamp(62px, 19.9vw, 126px)";
 
   return (
     <div className="slotShell" style={{ height: totalHeight }}>
@@ -1204,8 +1215,8 @@ const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
 
       <div
         key={animKey}
-        className={`cardTop ${isActive ? 'activeCard' : 'inactiveCard'} ${animKey ? 'flipIn' : ''}`}
-        style={{ top: prevCard ? 'clamp(18px, 4.6vw, 34px)' : 0 }}
+        className={`cardTop ${isActive ? "activeCard" : "inactiveCard"} ${animKey ? "flipIn" : ""}`}
+        style={{ top: prevCard ? "clamp(18px, 4.6vw, 34px)" : 0 }}
       >
         {revealed ? <CardFace card={current} /> : <CardBack />}
       </div>
@@ -1213,15 +1224,21 @@ const CardSlot = ({ current, history, revealed, isActive, animKey }) => {
   );
 };
 
-const BusRunner = ({ activeIdx, crashing, winning, entering, enterDirection }) => {
+const BusRunner = ({
+  activeIdx,
+  crashing,
+  winning,
+  entering,
+  enterDirection,
+}) => {
   const safeIdx = Math.max(0, Math.min(4, activeIdx));
   const leftPercent = `${10 + safeIdx * 20}%`;
 
   const enteringClass = entering
-    ? enterDirection === 'right'
-      ? 'enteringRight'
-      : 'enteringLeft'
-    : '';
+    ? enterDirection === "right"
+      ? "enteringRight"
+      : "enteringLeft"
+    : "";
 
   return (
     <div className="busTrack">
@@ -1260,7 +1277,7 @@ const BusRunner = ({ activeIdx, crashing, winning, entering, enterDirection }) =
       )}
 
       <div
-        className={`busVehicle ${enteringClass} ${winning ? 'winning' : ''}`}
+        className={`busVehicle ${enteringClass} ${winning ? "winning" : ""}`}
         style={{ left: leftPercent }}
       >
         <div className="busTrail">
@@ -1268,7 +1285,9 @@ const BusRunner = ({ activeIdx, crashing, winning, entering, enterDirection }) =
           <span className="sparkle">✨</span>
         </div>
 
-        <div className={`busEmoji ${crashing ? 'crashing' : ''} ${winning ? 'winning' : ''}`}>
+        <div
+          className={`busEmoji ${crashing ? "crashing" : ""} ${winning ? "winning" : ""}`}
+        >
           🚌
         </div>
       </div>
@@ -1296,16 +1315,18 @@ const CardGame = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
-  const [leaderboardError, setLeaderboardError] = useState('');
+  const [leaderboardError, setLeaderboardError] = useState("");
   const [playerNameDraft, setPlayerNameDraft] = useState(savedName);
   const [activePlayerName, setActivePlayerName] = useState(savedName);
-  const [loginMessage, setLoginMessage] = useState(savedName ? `Logged in as ${savedName}` : '');
+  const [loginMessage, setLoginMessage] = useState(
+    savedName ? `Logged in as ${savedName}` : "",
+  );
   const [loginLoading, setLoginLoading] = useState(false);
   const [takenName, setTakenName] = useState(null);
   const [busCrash, setBusCrash] = useState(false);
   const [busWin, setBusWin] = useState(false);
   const [busEntering, setBusEntering] = useState(false);
-  const [busEnterDirection, setBusEnterDirection] = useState('left');
+  const [busEnterDirection, setBusEnterDirection] = useState("left");
   const [failPending, setFailPending] = useState(false);
   const [lifetimeSips, setLifetimeSips] = useState(() => loadLifetimeSips());
 
@@ -1316,13 +1337,13 @@ const CardGame = () => {
 
   const loadLeaderboard = useCallback(async () => {
     setLeaderboardLoading(true);
-    setLeaderboardError('');
+    setLeaderboardError("");
 
     try {
       const data = await fetchLeaderboard();
       setLeaderboard(data);
     } catch (err) {
-      setLeaderboardError(err?.message || 'Could not load leaderboard.');
+      setLeaderboardError(err?.message || "Could not load leaderboard.");
     } finally {
       setLeaderboardLoading(false);
     }
@@ -1335,7 +1356,7 @@ const CardGame = () => {
 
   const openLogin = () => {
     setTakenName(null);
-    setLoginMessage(activePlayerName ? `Logged in as ${activePlayerName}` : '');
+    setLoginMessage(activePlayerName ? `Logged in as ${activePlayerName}` : "");
     setShowLogin(true);
   };
 
@@ -1360,12 +1381,12 @@ const CardGame = () => {
     const cleanName = cleanPlayerName(playerNameDraft);
 
     if (!cleanName) {
-      setLoginMessage('Enter a name first.');
+      setLoginMessage("Enter a name first.");
       return;
     }
 
     setLoginLoading(true);
-    setLoginMessage('');
+    setLoginMessage("");
 
     try {
       const existing = await findLeaderboardPlayer(cleanName);
@@ -1378,13 +1399,13 @@ const CardGame = () => {
           name: cleanName,
           sips: existing.sips,
         });
-        setLoginMessage('');
+        setLoginMessage("");
         return;
       }
 
       await completeLogin(cleanName);
     } catch (err) {
-      setLoginMessage(err?.message || 'Could not log in.');
+      setLoginMessage(err?.message || "Could not log in.");
     } finally {
       setLoginLoading(false);
     }
@@ -1398,7 +1419,7 @@ const CardGame = () => {
     try {
       await completeLogin(takenName.name);
     } catch (err) {
-      setLoginMessage(err?.message || 'Could not log in.');
+      setLoginMessage(err?.message || "Could not log in.");
     } finally {
       setLoginLoading(false);
     }
@@ -1411,10 +1432,10 @@ const CardGame = () => {
 
   const handleLogout = () => {
     clearPlayerName();
-    setActivePlayerName('');
-    setPlayerNameDraft('');
+    setActivePlayerName("");
+    setPlayerNameDraft("");
     setTakenName(null);
-    setLoginMessage('Logged out.');
+    setLoginMessage("Logged out.");
   };
 
   const drawCard = useCallback((pool, ptr, excludedKeys = new Set()) => {
@@ -1439,59 +1460,62 @@ const CardGame = () => {
     };
   }, []);
 
-  const resetBoardForRuleset = useCallback((nextRuleset, enterFrom = 'left') => {
-    clearTimeout(penaltyTimer.current);
-    clearTimeout(busCrashTimer.current);
-    clearTimeout(busEnterTimer.current);
-    clearTimeout(winTimer.current);
+  const resetBoardForRuleset = useCallback(
+    (nextRuleset, enterFrom = "left") => {
+      clearTimeout(penaltyTimer.current);
+      clearTimeout(busCrashTimer.current);
+      clearTimeout(busEnterTimer.current);
+      clearTimeout(winTimer.current);
 
-    setBusCrash(false);
-    setBusWin(false);
-    setFailPending(false);
-    setBusEnterDirection(enterFrom);
+      setBusCrash(false);
+      setBusWin(false);
+      setFailPending(false);
+      setBusEnterDirection(enterFrom);
 
-    if (enterFrom === 'none') {
-      setBusEntering(false);
-    } else {
-      setBusEntering(true);
-
-      busEnterTimer.current = setTimeout(() => {
+      if (enterFrom === "none") {
         setBusEntering(false);
-      }, BUS_ENTER_MS);
-    }
+      } else {
+        setBusEntering(true);
 
-    const pool = shuffle(FULL_DECK);
+        busEnterTimer.current = setTimeout(() => {
+          setBusEntering(false);
+        }, BUS_ENTER_MS);
+      }
 
-    setDeckPool(pool);
-    setDeckPtr(5);
-    setPositions(pool.slice(0, 5));
-    setHistory([[], [], [], [], []]);
-    setRevealed(
-      nextRuleset === RULESETS.AUCKLAND
-        ? [false, false, false, false, false]
-        : [true, false, false, false, true]
-    );
-    setActiveIdx(0);
-    setPenalty(null);
-    setWinner(false);
-    setGameOver(false);
-    setShakeSlot(null);
-    setAnimKey(0);
-  }, []);
+      const pool = shuffle(FULL_DECK);
+
+      setDeckPool(pool);
+      setDeckPtr(5);
+      setPositions(pool.slice(0, 5));
+      setHistory([[], [], [], [], []]);
+      setRevealed(
+        nextRuleset === RULESETS.AUCKLAND
+          ? [false, false, false, false, false]
+          : [true, false, false, false, true],
+      );
+      setActiveIdx(0);
+      setPenalty(null);
+      setWinner(false);
+      setGameOver(false);
+      setShakeSlot(null);
+      setAnimKey(0);
+    },
+    [],
+  );
 
   const startGame = useCallback(() => {
-    resetBoardForRuleset(ruleset, 'left');
+    resetBoardForRuleset(ruleset, "left");
   }, [resetBoardForRuleset, ruleset]);
 
   useEffect(() => {
-    resetBoardForRuleset(RULESETS.WELLY, 'left');
+    resetBoardForRuleset(RULESETS.WELLY, "left");
   }, [resetBoardForRuleset]);
 
   const switchRuleset = (nextRuleset) => {
     if (ruleset === nextRuleset) return;
 
     setRuleset(nextRuleset);
-    resetBoardForRuleset(nextRuleset, 'left');
+    resetBoardForRuleset(nextRuleset, "left");
   };
 
   const resetPlayerSipCount = async () => {
@@ -1507,7 +1531,7 @@ const CardGame = () => {
         loadLeaderboard();
       }
     } catch (err) {
-      setLeaderboardError(err?.message || 'Could not reset leaderboard.');
+      setLeaderboardError(err?.message || "Could not reset leaderboard.");
     }
   };
 
@@ -1516,14 +1540,14 @@ const CardGame = () => {
 
     setPenalty(penaltyObj.label);
 
-    setLifetimeSips(prev => {
+    setLifetimeSips((prev) => {
       const newTotal = prev + penaltyObj.sips;
       saveLifetimeSips(newTotal);
       return newTotal;
     });
 
     if (!activePlayerName) {
-      setLoginMessage('Log in with a name to save online.');
+      setLoginMessage("Log in with a name to save online.");
       return;
     }
 
@@ -1534,7 +1558,7 @@ const CardGame = () => {
         }
       })
       .catch((err) => {
-        setLeaderboardError(err?.message || 'Could not sync leaderboard.');
+        setLeaderboardError(err?.message || "Could not sync leaderboard.");
       });
   };
 
@@ -1556,7 +1580,7 @@ const CardGame = () => {
     }, WIN_ANIMATION_MS + WIN_POPUP_AFTER_ANIMATION_MS);
   };
 
-  const failCurrentCard = (afterPenaltyPopup) => {
+  const failCurrentCard = (afterPenaltyPopup, penaltyIdx = activeIdx) => {
     setFailPending(true);
     setShakeSlot(activeIdx);
     setTimeout(() => setShakeSlot(null), 500);
@@ -1576,7 +1600,7 @@ const CardGame = () => {
     }, 850);
 
     penaltyTimer.current = setTimeout(() => {
-      addPenaltyToTally(activeIdx);
+      addPenaltyToTally(penaltyIdx);
 
       penaltyTimer.current = setTimeout(() => {
         setPenalty(null);
@@ -1592,17 +1616,21 @@ const CardGame = () => {
   const handleWellyGuess = (type) => {
     const current = positions[activeIdx];
     const excludedKeys = getVisibleCardKeys(positions, history);
-    const { card: next, newPool, newPtr } = drawCard(deckPool, deckPtr, excludedKeys);
+    const {
+      card: next,
+      newPool,
+      newPtr,
+    } = drawCard(deckPool, deckPtr, excludedKeys);
 
     setDeckPool(newPool);
     setDeckPtr(newPtr);
 
     const correct =
-      (type === 'higher' && next.val > current.val) ||
-      (type === 'lower' && next.val < current.val) ||
-      (type === 'even' && next.val === current.val);
+      (type === "higher" && next.val > current.val) ||
+      (type === "lower" && next.val < current.val) ||
+      (type === "even" && next.val === current.val);
 
-    const newHistory = history.map(h => [...h]);
+    const newHistory = history.map((h) => [...h]);
     newHistory[activeIdx] = [...history[activeIdx], current];
 
     const newPositions = [...positions];
@@ -1614,7 +1642,7 @@ const CardGame = () => {
     setHistory(newHistory);
     setPositions(newPositions);
     setRevealed(newRevealed);
-    setAnimKey(k => k + 1);
+    setAnimKey((k) => k + 1);
 
     if (correct) {
       if (activeIdx === 4) {
@@ -1647,12 +1675,17 @@ const CardGame = () => {
 
     if (activeIdx === 1) {
       correct =
-        (type === 'even' && !isOdd(current, RULESETS.AUCKLAND)) ||
-        (type === 'odd' && isOdd(current, RULESETS.AUCKLAND));
+        (type === "even" && !isOdd(current, RULESETS.AUCKLAND)) ||
+        (type === "odd" && isOdd(current, RULESETS.AUCKLAND));
     }
 
     if (activeIdx === 2) {
-      const result = getInsideOutsideResult(current, positions[0], positions[1], RULESETS.AUCKLAND);
+      const result = getInsideOutsideResult(
+        current,
+        positions[0],
+        positions[1],
+        RULESETS.AUCKLAND,
+      );
       correct = type === result;
     }
 
@@ -1661,9 +1694,9 @@ const CardGame = () => {
       const previousValue = cardValueForRuleset(previous, RULESETS.AUCKLAND);
 
       correct =
-        (type === 'higher' && currentValue > previousValue) ||
-        (type === 'lower' && currentValue < previousValue) ||
-        (type === 'even' && currentValue === previousValue);
+        (type === "higher" && currentValue > previousValue) ||
+        (type === "lower" && currentValue < previousValue) ||
+        (type === "even" && currentValue === previousValue);
     }
 
     if (activeIdx === 4) {
@@ -1674,7 +1707,7 @@ const CardGame = () => {
     newRevealed[activeIdx] = true;
 
     setRevealed(newRevealed);
-    setAnimKey(k => k + 1);
+    setAnimKey((k) => k + 1);
 
     if (correct) {
       if (activeIdx === 4) {
@@ -1687,8 +1720,8 @@ const CardGame = () => {
     }
 
     failCurrentCard(() => {
-      resetBoardForRuleset(RULESETS.AUCKLAND, 'none');
-    });
+      resetBoardForRuleset(RULESETS.AUCKLAND, "none");
+    }, 0);
   };
 
   const handleGuess = (type) => {
@@ -1703,20 +1736,24 @@ const CardGame = () => {
 
   const getBannerText = () => {
     if (winner) {
-      return <span style={{ opacity: 0, userSelect: 'none' }}>placeholder</span>;
+      return (
+        <span style={{ opacity: 0, userSelect: "none" }}>placeholder</span>
+      );
     }
 
     if (ruleset === RULESETS.WELLY) {
       const currentCard = positions[activeIdx];
 
       if (!currentCard) {
-        return <span style={{ opacity: 0, userSelect: 'none' }}>placeholder</span>;
+        return (
+          <span style={{ opacity: 0, userSelect: "none" }}>placeholder</span>
+        );
       }
 
       return (
         <span className="bannerLine">
-          Higher, lower, or even than the{' '}
-          <strong style={{ color: '#f0d080' }}>
+          Higher, lower, or even than the{" "}
+          <strong style={{ color: "#f0d080" }}>
             {rankLabel(currentCard)} of {currentCard.name}
           </strong>
           ?
@@ -1725,11 +1762,15 @@ const CardGame = () => {
     }
 
     if (activeIdx === 0) {
-      return <span className="bannerLine">Pick the colour of the first card.</span>;
+      return (
+        <span className="bannerLine">Pick the colour of the first card.</span>
+      );
     }
 
     if (activeIdx === 1) {
-      return <span className="bannerLine">Will the next card be even or odd?</span>;
+      return (
+        <span className="bannerLine">Will the next card be even or odd?</span>
+      );
     }
 
     if (activeIdx === 2) {
@@ -1738,8 +1779,8 @@ const CardGame = () => {
 
       return (
         <span className="bannerLine">
-          Inside, outside, or even{' '}
-          <strong style={{ color: '#f0d080' }}>
+          Inside, outside, or even{" "}
+          <strong style={{ color: "#f0d080" }}>
             {rankLabel(first)} and {rankLabel(second)}
           </strong>
           ?
@@ -1752,8 +1793,8 @@ const CardGame = () => {
 
       return (
         <span className="bannerLine">
-          Higher, lower, or even than the{' '}
-          <strong style={{ color: '#f0d080' }}>
+          Higher, lower, or even than the{" "}
+          <strong style={{ color: "#f0d080" }}>
             {rankLabel(previous)} of {previous.name}
           </strong>
           ?
@@ -1761,37 +1802,39 @@ const CardGame = () => {
       );
     }
 
-    return <span className="bannerLine">Guess the suit of the final card.</span>;
+    return (
+      <span className="bannerLine">Guess the suit of the final card.</span>
+    );
   };
 
   const getRulesContent = () => {
     if (ruleset === RULESETS.WELLY) {
       return {
-        title: 'Welly Rules',
+        title: "Welly Rules",
         lines: [
-          'Five cards are dealt. The first and last card start face up.',
-          'Guess whether the next card is higher, lower, or even than the current card.',
-          'Ace is high.',
-          'If you guess right, move to the next card.',
-          'If you guess wrong, drink the card penalty and go back to card 1.',
-          'The deck keeps cycling in order during the round. It only reshuffles when the game restarts.',
-          'Penalties are: 1 sip, 2 sips, 3 sips, half drink, full drink.',
+          "Five cards are dealt. The first and last card start face up.",
+          "Guess whether the next card is higher, lower, or even than the current card.",
+          "Ace is high.",
+          "If you guess right, move to the next card.",
+          "If you guess wrong, drink the card penalty and go back to card 1.",
+          "The deck keeps cycling in order during the round. It only reshuffles when the game restarts.",
+          "Penalties are: 1 sip, 2 sips, 3 sips, half drink, full drink.",
         ],
       };
     }
 
     return {
-      title: 'Auckland Rules',
+      title: "Auckland Rules",
       lines: [
-        'Five cards are dealt face down.',
-        'Card 1: guess red or black.',
-        'Card 2: guess even or odd. Ace counts as 1.',
-        'Card 3: guess inside, outside, or even against the first two cards. Inside is strictly between. Even means hitting either boundary.',
-        'Card 4: guess higher, lower, or even than the previous card. Ace counts as 1.',
-        'Card 5: guess the suit.',
-        'If you guess wrong, drink the card penalty and the whole board resets.',
-        'The deck keeps cycling in order during the round. It only reshuffles when the game restarts.',
-        'Penalties are: 1 sip, 2 sips, 3 sips, half drink, full drink.',
+        "Five cards are dealt face down.",
+        "Card 1: guess red or black.",
+        "Card 2: guess even or odd. Ace counts as 1.",
+        "Card 3: guess inside, outside, or even against the first two cards. Inside is strictly between. Even means hitting either boundary.",
+        "Card 4: guess higher, lower, or even than the previous card. Ace counts as 1.",
+        "Card 5: guess the suit.",
+        "If you guess wrong, drink 1 sip and the whole board resets.",
+        "The deck keeps cycling in order during the round. It only reshuffles when the game restarts.",
+        "Auckland wrong guesses are always 1 sip.",
       ],
     };
   };
@@ -1799,47 +1842,47 @@ const CardGame = () => {
   const getControls = () => {
     if (ruleset === RULESETS.WELLY) {
       return [
-        { type: 'higher', label: '↑ Higher', className: 'btnHigher' },
-        { type: 'lower', label: '↓ Lower', className: 'btnLower' },
-        { type: 'even', label: '= Even', className: 'btnEven' },
+        { type: "higher", label: "↑ Higher", className: "btnHigher" },
+        { type: "lower", label: "↓ Lower", className: "btnLower" },
+        { type: "even", label: "= Even", className: "btnEven" },
       ];
     }
 
     if (activeIdx === 0) {
       return [
-        { type: 'red', label: '♥ Red', className: 'btnRed' },
-        { type: 'black', label: '♠ Black', className: 'btnBlack' },
+        { type: "red", label: "♥ Red", className: "btnRed" },
+        { type: "black", label: "♠ Black", className: "btnBlack" },
       ];
     }
 
     if (activeIdx === 1) {
       return [
-        { type: 'even', label: '= Even', className: 'btnEven' },
-        { type: 'odd', label: 'Odd', className: 'btnOdd' },
+        { type: "even", label: "= Even", className: "btnEven" },
+        { type: "odd", label: "Odd", className: "btnOdd" },
       ];
     }
 
     if (activeIdx === 2) {
       return [
-        { type: 'inside', label: 'Inside', className: 'btnHigher' },
-        { type: 'outside', label: 'Outside', className: 'btnLower' },
-        { type: 'even', label: '= Even', className: 'btnEven' },
+        { type: "inside", label: "Inside", className: "btnHigher" },
+        { type: "outside", label: "Outside", className: "btnLower" },
+        { type: "even", label: "= Even", className: "btnEven" },
       ];
     }
 
     if (activeIdx === 3) {
       return [
-        { type: 'higher', label: '↑ Higher', className: 'btnHigher' },
-        { type: 'lower', label: '↓ Lower', className: 'btnLower' },
-        { type: 'even', label: '= Even', className: 'btnEven' },
+        { type: "higher", label: "↑ Higher", className: "btnHigher" },
+        { type: "lower", label: "↓ Lower", className: "btnLower" },
+        { type: "even", label: "= Even", className: "btnEven" },
       ];
     }
 
     return [
-      { type: 'spades', label: '♠ Spades', className: 'btnBlack' },
-      { type: 'clubs', label: '♣ Clubs', className: 'btnBlack' },
-      { type: 'hearts', label: '♥ Hearts', className: 'btnRed' },
-      { type: 'diamonds', label: '♦ Diamonds', className: 'btnRed' },
+      { type: "spades", label: "♠ Spades", className: "btnBlack" },
+      { type: "clubs", label: "♣ Clubs", className: "btnBlack" },
+      { type: "hearts", label: "♥ Hearts", className: "btnRed" },
+      { type: "diamonds", label: "♦ Diamonds", className: "btnRed" },
     ];
   };
 
@@ -1857,7 +1900,7 @@ const CardGame = () => {
         </button>
 
         <button className="cornerBtn" onClick={openLogin}>
-          👤 {activePlayerName || 'Login'}
+          👤 {activePlayerName || "Login"}
         </button>
       </div>
 
@@ -1870,7 +1913,7 @@ const CardGame = () => {
       <div className="topMetaRow">
         <div className="rulesToggle">
           <button
-            className={`rulesToggleBtn ${ruleset === RULESETS.WELLY ? 'active' : ''}`}
+            className={`rulesToggleBtn ${ruleset === RULESETS.WELLY ? "active" : ""}`}
             onClick={() => switchRuleset(RULESETS.WELLY)}
             disabled={ruleset === RULESETS.WELLY}
           >
@@ -1878,7 +1921,7 @@ const CardGame = () => {
           </button>
 
           <button
-            className={`rulesToggleBtn ${ruleset === RULESETS.AUCKLAND ? 'active' : ''}`}
+            className={`rulesToggleBtn ${ruleset === RULESETS.AUCKLAND ? "active" : ""}`}
             onClick={() => switchRuleset(RULESETS.AUCKLAND)}
             disabled={ruleset === RULESETS.AUCKLAND}
           >
@@ -1895,7 +1938,9 @@ const CardGame = () => {
           <div className="statDivider" />
 
           <div className="statBlock">
-            <span className="statNum">{(lifetimeSips / SIPS_PER_DRINK).toFixed(1)}</span>
+            <span className="statNum">
+              {(lifetimeSips / SIPS_PER_DRINK).toFixed(1)}
+            </span>
             <span className="statLabel">drinks consumed</span>
           </div>
 
@@ -1905,9 +1950,7 @@ const CardGame = () => {
         </div>
       </div>
 
-      <div className="banner">
-        {getBannerText()}
-      </div>
+      <div className="banner">{getBannerText()}</div>
 
       <div className="cardStage">
         <BusRunner
@@ -1920,10 +1963,7 @@ const CardGame = () => {
 
         <div className="cardRow">
           {positions.map((card, i) => (
-            <div
-              key={i}
-              className={shakeSlot === i ? 'shake' : ''}
-            >
+            <div key={i} className={shakeSlot === i ? "shake" : ""}>
               <CardSlot
                 current={card}
                 history={history[i]}
@@ -1937,7 +1977,7 @@ const CardGame = () => {
       </div>
 
       <div className="controls">
-        {controls.map(control => (
+        {controls.map((control) => (
           <button
             key={control.type}
             className={`btn ${control.className}`}
@@ -1972,19 +2012,26 @@ const CardGame = () => {
                     placeholder="Enter username"
                     maxLength={20}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === "Enter") {
                         handleLogin();
                       }
                     }}
                   />
 
-                  <button className="smallBtn" onClick={handleLogin} disabled={loginLoading}>
-                    {loginLoading ? 'Checking...' : 'Login'}
+                  <button
+                    className="smallBtn"
+                    onClick={handleLogin}
+                    disabled={loginLoading}
+                  >
+                    {loginLoading ? "Checking..." : "Login"}
                   </button>
                 </div>
 
                 <div className="status">
-                  {loginMessage || (activePlayerName ? `Currently logged in as ${activePlayerName}` : 'Not logged in')}
+                  {loginMessage ||
+                    (activePlayerName
+                      ? `Currently logged in as ${activePlayerName}`
+                      : "Not logged in")}
                 </div>
 
                 <div className="modalActions">
@@ -1994,7 +2041,10 @@ const CardGame = () => {
                     </button>
                   )}
 
-                  <button className="btn btnRestart" onClick={() => setShowLogin(false)}>
+                  <button
+                    className="btn btnRestart"
+                    onClick={() => setShowLogin(false)}
+                  >
                     Close
                   </button>
                 </div>
@@ -2004,14 +2054,22 @@ const CardGame = () => {
             {takenName && (
               <>
                 <div className="modalSub">
-                  <strong style={{ color: '#f0d080' }}>{takenName.name}</strong> is already on the leaderboard
-                  with <strong style={{ color: '#f0d080' }}>{drinksLabelFromSips(takenName.sips)}</strong>.
+                  <strong style={{ color: "#f0d080" }}>{takenName.name}</strong>{" "}
+                  is already on the leaderboard with{" "}
+                  <strong style={{ color: "#f0d080" }}>
+                    {drinksLabelFromSips(takenName.sips)}
+                  </strong>
+                  .
                   <br />
                   Is this you?
                 </div>
 
                 <div className="modalActions">
-                  <button className="btn btnHigher" onClick={confirmTakenNameLogin} disabled={loginLoading}>
+                  <button
+                    className="btn btnHigher"
+                    onClick={confirmTakenNameLogin}
+                    disabled={loginLoading}
+                  >
                     Yes, log me in
                   </button>
 
@@ -2019,7 +2077,7 @@ const CardGame = () => {
                     className="btn btnLower"
                     onClick={() => {
                       setTakenName(null);
-                      setLoginMessage('Choose another username.');
+                      setLoginMessage("Choose another username.");
                     }}
                   >
                     No, choose another
@@ -2046,7 +2104,10 @@ const CardGame = () => {
             </div>
 
             <div className="modalActions">
-              <button className="btn btnRestart" onClick={() => setShowRules(false)}>
+              <button
+                className="btn btnRestart"
+                onClick={() => setShowRules(false)}
+              >
                 Close
               </button>
             </div>
@@ -2060,8 +2121,11 @@ const CardGame = () => {
             <div className="modalTitle">Drink Leaderboard</div>
 
             <div className="modalSub">
-              Logged in as <strong style={{ color: '#f0d080' }}>{activePlayerName || 'nobody'}</strong>.
-              Wrong guesses add to your drink total.
+              Logged in as{" "}
+              <strong style={{ color: "#f0d080" }}>
+                {activePlayerName || "nobody"}
+              </strong>
+              . Wrong guesses add to your drink total.
             </div>
 
             {leaderboardLoading && (
@@ -2072,28 +2136,41 @@ const CardGame = () => {
               <div className="status">{leaderboardError}</div>
             )}
 
-            {!leaderboardLoading && !leaderboardError && leaderboard.length === 0 && (
-              <div className="status">No scores yet.</div>
-            )}
+            {!leaderboardLoading &&
+              !leaderboardError &&
+              leaderboard.length === 0 && (
+                <div className="status">No scores yet.</div>
+              )}
 
-            {!leaderboardLoading && !leaderboardError && leaderboard.length > 0 && (
-              <div className="leaderboardList">
-                {leaderboard.map((row, i) => (
-                  <div key={`${row.name}-${i}`} className="leaderboardRow">
-                    <span className="leaderboardRank">#{i + 1}</span>
-                    <span className="leaderboardName">{row.name}</span>
-                    <span className="leaderboardSips">{drinksLabelFromSips(row.sips)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            {!leaderboardLoading &&
+              !leaderboardError &&
+              leaderboard.length > 0 && (
+                <div className="leaderboardList">
+                  {leaderboard.map((row, i) => (
+                    <div key={`${row.name}-${i}`} className="leaderboardRow">
+                      <span className="leaderboardRank">#{i + 1}</span>
+                      <span className="leaderboardName">{row.name}</span>
+                      <span className="leaderboardSips">
+                        {drinksLabelFromSips(row.sips)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
             <div className="modalActions">
-              <button className="btn btnEven" onClick={loadLeaderboard} disabled={leaderboardLoading}>
+              <button
+                className="btn btnEven"
+                onClick={loadLeaderboard}
+                disabled={leaderboardLoading}
+              >
                 Refresh
               </button>
 
-              <button className="btn btnRestart" onClick={() => setShowLeaderboard(false)}>
+              <button
+                className="btn btnRestart"
+                onClick={() => setShowLeaderboard(false)}
+              >
                 Close
               </button>
             </div>
@@ -2105,7 +2182,7 @@ const CardGame = () => {
         <div className="penaltyToast">
           <div className="penaltyMsg">{penalty}</div>
           <div className="penaltySub">
-            {ruleset === RULESETS.AUCKLAND ? 'Board reset!' : 'Back to card 1!'}
+            {ruleset === RULESETS.AUCKLAND ? "Board reset!" : "Back to card 1!"}
           </div>
         </div>
       )}
@@ -2117,7 +2194,11 @@ const CardGame = () => {
             <div className="winnerText">WINNER!</div>
             <div className="winnerSub">You rode the bus!</div>
 
-            <button className="btn btnRestart" style={{ marginTop: 18 }} onClick={startGame}>
+            <button
+              className="btn btnRestart"
+              style={{ marginTop: 18 }}
+              onClick={startGame}
+            >
               Play Again
             </button>
           </div>
